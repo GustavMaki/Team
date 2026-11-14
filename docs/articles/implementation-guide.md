@@ -1292,6 +1292,63 @@ builder.AddThargaTeam(o =>
 
 > Server/SSR only. Revalidation is wired when `SkipAuthStateDecoration` is `true` (the default, and the signal for a server-hosted app); a standalone WASM client has no server circuit to revalidate this way. A team **switch** still refreshes claims immediately via a full reload regardless of this setting.
 
+#### Refusing entry to a team, or sending the caller to step up first
+
+A host sometimes has to refuse entry to a team until the caller has done something first, such as an organisation that requires BankID: a member whose
+session has not been through it may not work in that team yet. The selected team travels in a cookie that any browser can set by hand, so a check in the
+selector alone refuses nothing. Register an `ITeamEntryGuard` and the library asks it **where the team's claims are built** (the HTTP request, the circuit's
+revalidation and a team switch all share it), so the answer is enforced on the server:
+
+```csharp
+public sealed class RequireBankId(ITeamPolicies policies) : ITeamEntryGuard
+{
+    public async Task<TeamEntryDecision> CheckAsync(ClaimsPrincipal user, string teamKey, CancellationToken cancellationToken = default)
+    {
+        if (!await policies.RequiresBankIdAsync(teamKey, cancellationToken)) return TeamEntryDecision.Allow;
+
+        return user.HasClaim("amr", "bankid")
+            ? TeamEntryDecision.Allow
+            : TeamEntryDecision.StepUp("/step-up/bankid?return={returnUrl}", "This organisation requires BankID.");   // or TeamEntryDecision.Deny("Contract ended.")
+    }
+}
+
+builder.Services.AddScoped<ITeamEntryGuard, RequireBankId>();
+```
+
+- **A refused team is not issued**: no `TeamKey` claim, no team scopes. The caller has no team selected rather than a team they may not use, and a
+  cookie set by hand to a refused team gets nothing. The guard is asked only of someone who is already allowed in (a member, or consented access), so it
+  never decides *who* is in a team, only whether they may enter *now*. Pass the whole principal: a host decides for consented staff as it likes.
+- **The interface follows.** The team selector keeps the previous selection, shows a *Not allowed* badge with the reason, and for a step-up sends the
+  browser to the address with `{returnUrl}` replaced by the page it was on, URL-encoded, after remembering the team as the one asked for. Put
+  `<TeamEntryNotice />` in the layout (as `SuspendedTeamNotice` is) for the reason and a *Continue* button on the page itself. The return value is a path on
+  your site that the library made; your step-up endpoint must still redirect to **local paths only**.
+- **When the answer changes**, tell the library: `ITeamEntryGuardState.InvalidateAsync(userKey, teamKey)`. Cached answers are forgotten and every open
+  circuit of that user **on this instance** re-evaluates at once, instead of at the next interval. On several instances call it on each over whatever you
+  already use between them, or accept that another instance catches up when its cached answer expires.
+- **Audited**: a refusal is recorded (`team` / `entry-denied`, the team, the outcome and the reason), once per cache window per session and team, so a
+  refused caller reloading the page leaves one entry and not one per request.
+- **API keys and MCP are not sessions** and stay governed by the team context middleware; a host that wants the same rule there calls its guard from its own
+  code.
+
+```csharp
+builder.AddThargaTeam(o =>
+{
+    o.Blazor.TeamEntry.OnError = TeamEntryErrorBehavior.Deny;        // default; Allow favours availability over restriction
+    o.Blazor.TeamEntry.CacheDuration = TimeSpan.FromSeconds(30);     // default; Zero asks the guard every time
+    // o.Blazor.TeamEntry.Enabled = false;                           // switch a registered guard off without removing it
+});
+```
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `TeamEntry.Enabled` | `true` | Whether a registered guard is asked. `false` is a switch for a guard that misbehaves; with no guard registered nothing here runs. |
+| `TeamEntry.OnError` | `Deny` | What happens when the guard throws or returns nothing. `Deny` refuses with a neutral message (the exception stays in the log and the audit entry); `Allow` lets entry through. |
+| `TeamEntry.CacheDuration` | 30 seconds | How long an answer is remembered per user, **session** and team on this instance. A person with two browsers never shares an answer. |
+
+**Cost.** The guard is asked wherever claims are built: once per authenticated request that carries the team cookie, and once per circuit per revalidation
+interval. Within the cache window a repeat is a dictionary lookup, so the cost is the guard's own, once per user, session and team per window. With no guard
+registered the only added work is a null check. The sample's `SampleTeamEntryGuard` shows each answer: rename a team to contain *Locked* or *BankID*.
+
 ### Verification
 
 After login, the team selector should appear. Creating a team should persist to MongoDB. Switching teams should update the claims.

@@ -230,6 +230,9 @@ builder.AddMongoDB(o => o.AddCollectionInterceptor<TeamAccessReportInterceptor>(
 // default all-visible provider.
 builder.Services.AddScoped<ITeamScopeVisibilityProvider, Tharga.Team.Sample.Framework.SampleFeatureScopeVisibility>();
 
+// The host's rule for who may work in a team: a team named Locked refuses entry, one named BankID sends the caller to /sample-step-up first.
+builder.Services.AddScoped<ITeamEntryGuard, Tharga.Team.Sample.Framework.SampleTeamEntryGuard>();
+
 // Demo state behind the member-grid extension points on /team. Singleton so one browser tab's change is
 // visible in another; in memory because persisting a host's own member field is the host's job.
 builder.Services.AddSingleton<Tharga.Team.Sample.Framework.Team.MemberProjectDemo>();
@@ -460,6 +463,19 @@ app.MapThargaSupportAiConnection();
 // Where unsubscribe links lead. Anonymous by design: the token in the link authorizes the one change it names, and
 // GET only asks -- the change is a POST, from the page's button or a mail provider's one-click request.
 app.MapThargaMailUnsubscribe();
+
+// Stands in for a stronger sign-in: records that the caller stepped up, tells the library the answer changed so open pages catch up at once, and sends them
+// back to the page they came from. Local paths only: the return value is input, and an open redirect is how a step-up page gets abused.
+app.MapGet("/sample-step-up", async (HttpContext http, string returnUrl, IUserService users, ITeamEntryGuardState state) =>
+{
+    if (http.User.Identity?.IsAuthenticated != true) return Results.Challenge();
+
+    Tharga.Team.Sample.Framework.SampleTeamEntryGuard.MarkSteppedUp(http.User);
+    var user = await users.GetCurrentUserAsync(http.User, recordActivity: false);
+    if (user?.Key != null) await state.InvalidateAsync(user.Key);
+
+    return Results.LocalRedirect(!string.IsNullOrEmpty(returnUrl) && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") ? returnUrl : "/");
+}).RequireAuthorization();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

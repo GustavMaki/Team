@@ -6,6 +6,7 @@
 @inject ITeamOversightService TeamOversightService
 @inject IThargaTextProvider TextProvider
 @inject IOptions<ThargaBlazorOptions> BlazorOptions
+@inject IServiceProvider Services
 
 <style>
     /* The open list as wide as its widest team, so a name never wraps onto a second line. Radzen pins the
@@ -85,6 +86,13 @@
             </RadzenDropDown>
         }
 
+        @* A team the host's rule refused: the choice did not take, and the reason is one hover away. *@
+        @if (_refusal != null)
+        {
+            <RadzenBadge BadgeStyle="BadgeStyle.Warning" Variant="Variant.Flat" Text="@_text[TeamEntryText.Badge]"
+                         title="@(_refusal.Decision.Reason ?? _text[TeamEntryText.DefaultReason])" data-team-entry-badge />
+        }
+
         @if (AccessLevelBadge.ShouldShow(context.User, SelectedTeam != null))
         {
             var accessLevel = AccessLevelBadge.Resolve(context.User);
@@ -157,6 +165,11 @@
     private bool _showAccess;
     private Dictionary<string, CallerTeamAccess> _accessByTeam = new();
     private ITeam _selectedTeam;
+    private TeamEntryRefusal _refusal;
+
+    /// <summary>The host's team entry rule, when the application has the framework registered; a component rendered on its own has none.</summary>
+    private ITeamEntryService TeamEntry => _teamEntry ??= Services.GetService(typeof(ITeamEntryService)) as ITeamEntryService;
+    private ITeamEntryService _teamEntry;
 
     /// <summary>
     /// A tag on a team in the open list that the caller does not hold through membership: a short, outlined
@@ -209,7 +222,7 @@
     protected override async Task OnInitializedAsync()
     {
         _text = await TextProvider.ResolveAsync(
-            [TeamMenuText.Loading, TeamMenuText.CreateTeam, .. TeamSelectorText.All, .. AccessLevelText.All]);
+            [TeamMenuText.Loading, TeamMenuText.CreateTeam, .. TeamSelectorText.All, .. AccessLevelText.All, .. TeamEntryText.All]);
 
         _allowTeamCreation = BlazorOptions.Value.AllowTeamCreation;
 
@@ -219,6 +232,15 @@
         TeamStateService.SelectedTeamChangedEvent += async (_, e) =>
         {
             _selectedTeam = e.SelectedTeam;
+            await InvokeAsync(StateHasChanged);
+        };
+
+        // A team the host's guard refused did not become the selection, so the picker goes back to what is, and says why.
+        _refusal = TeamEntry?.Refusal;
+        if (TeamEntry != null) TeamEntry.RefusalChanged += async (_, refusal) =>
+        {
+            _refusal = refusal;
+            if (refusal != null) _selectedTeam = TeamStateService.TryGetSelectedTeam(out var held) ? held : null;
             await InvokeAsync(StateHasChanged);
         };
 

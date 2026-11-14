@@ -43,10 +43,12 @@ internal class TeamStateService : ITeamStateService
     private readonly ThargaBlazorOptions _options;
     private readonly ILogger<TeamStateService> _logger;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
+    private readonly ITeamEntryService _teamEntry;
     private ITeam _selectedTeam;
 
-    public TeamStateService(ITeamService teamService, NavigationManager navigationManager, ILocalStorageService localStorageService, IJSRuntime jSRuntime, AuthenticationStateProvider authenticationStateProvider, IOptions<ThargaBlazorOptions> options, ILogger<TeamStateService> logger = null)
+    public TeamStateService(ITeamService teamService, NavigationManager navigationManager, ILocalStorageService localStorageService, IJSRuntime jSRuntime, AuthenticationStateProvider authenticationStateProvider, IOptions<ThargaBlazorOptions> options, ILogger<TeamStateService> logger = null, ITeamEntryService teamEntry = null)
     {
+        _teamEntry = teamEntry;
         _teamService = teamService;
         _navigationManager = navigationManager;
         _localStorageService = localStorageService;
@@ -62,6 +64,19 @@ internal class TeamStateService : ITeamStateService
         // selection change. Routed through SetSelectedTeamAsync rather than assigning the field, so the
         // last-seen stamp and persistence still happen; that is what the selector used to do by hand, and
         // the same-key guard in there stops a redundant round trip.
+        // A guard's answer changed (a step-up was done, say) and the circuit's claims were brought up to date: a selection that was refused can now be made, so it is resolved again.
+        if (_teamEntry != null) authenticationStateProvider.AuthenticationStateChanged += async _ =>
+        {
+            try
+            {
+                if (_selectedTeam == null) await GetSelectedTeamAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "The team selection could not be resolved again after the sign-in state changed.");
+            }
+        };
+
         _teamService.SelectTeamEvent += async (_, e) =>
         {
             if (e.Team != null) await SetSelectedTeamAsync(e.Team);
@@ -151,6 +166,15 @@ internal class TeamStateService : ITeamStateService
                 team = await _teamService.CreateTeamAsync();
             }
 
+            // The host's rule for who may work in a team (ITeamEntryGuard). The server has already refused to issue a refused team's claims, whatever the
+            // cookie says; this keeps the browser honest about it: no team is selected, the reason is available to show, and no cookie is set or page reloaded
+            // for a team the caller may not enter. With no guard registered this is skipped.
+            if (team != null && _teamEntry != null && !(await _teamEntry.CheckAsync(team.Key)).Allowed)
+            {
+                _selectedTeam = null;
+                return (null, previous != null);
+            }
+
             _selectedTeam = team;
 
             // Refresh only when the cookie doesn't already name this team — otherwise the claims for it
@@ -238,6 +262,25 @@ internal class TeamStateService : ITeamStateService
 
     public async Task SetSelectedTeamAsync(ITeam selectedTeam, bool reload)
     {
+        // Asked before anything is recorded: a refused team gets no last-seen stamp, no remembered choice and no cookie. A deny leaves the caller where they
+        // were, with the reason to show. A step-up is the caller's own wish to enter, so the team is remembered as the one they asked for and the browser is
+        // sent to do what the guard wants first; the page they come back to is then built for that team.
+        if (_teamEntry != null && _selectedTeam?.Key != selectedTeam.Key)
+        {
+            var decision = await _teamEntry.CheckAsync(selectedTeam.Key);
+            if (!decision.Allowed)
+            {
+                if (decision.Outcome == TeamEntryOutcome.StepUp)
+                {
+                    await _localStorageService.SetItemAsStringAsync(Constants.SelectedTeamLocalStorageKey, selectedTeam.Key);
+                    await SetTeamCookieAsync(selectedTeam.Key);
+                    _teamEntry.StepUp(_teamEntry.Refusal);
+                }
+
+                return;
+            }
+        }
+
         await _teamService.SetMemberLastSeenAsync(selectedTeam.Key);
 
         if (_selectedTeam?.Key == selectedTeam.Key) return;

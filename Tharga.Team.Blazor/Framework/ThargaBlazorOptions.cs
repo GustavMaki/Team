@@ -327,6 +327,12 @@ public record ThargaBlazorOptions : BlazorOptions
     public ClaimRevalidationOptions ClaimRevalidation { get; set; } = new();
 
     /// <summary>
+    /// Settings for the host's rule for who may work in a team (<see cref="ITeamEntryGuard"/>). Nothing here matters until a guard is registered; with
+    /// none, team entry works exactly as it always has.
+    /// </summary>
+    public TeamEntryOptions TeamEntry { get; set; } = new();
+
+    /// <summary>
     /// How often a stored change to the site's <see cref="IconSettings"/> is picked up by an instance that did
     /// not make it. Default 15 minutes; <see cref="TimeSpan.Zero"/> or less loads once at startup and never
     /// re-reads.
