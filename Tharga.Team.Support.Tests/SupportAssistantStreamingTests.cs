@@ -257,6 +257,65 @@ public class SupportAssistantStreamingTests
     }
 
     [Fact]
+    public async Task EveryReport_CarriesWhenTheAssistantStarted_SoADisplayCountsFromTheRealStart()
+    {
+        var world = new World(Responder(new StreamingChatClient("Check ", "the date.")));
+        var raised = await world.As(Alice).RaiseCaseAsync(TeamA, null, Question, SupportAssistance.Assistant);
+        var seen = new Reports();
+
+        await world.As(Alice).RunAssistantAsync(TeamA, raised.Id, seen);
+
+        Assert.True(seen.Items.Count > 1);
+        var started = Assert.Single(seen.Items.Select(x => x.StartedAt).Distinct());
+        Assert.NotNull(started);
+        Assert.True((DateTime.UtcNow - started.Value) < TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public async Task TheFirstReport_ComesBeforeTheModelHasSaidAnything_SoTheCountBeginsAtTheStart()
+    {
+        var world = new World(Responder(new StreamingChatClient("Check ", "the date.")));
+        var raised = await world.As(Alice).RaiseCaseAsync(TeamA, null, Question, SupportAssistance.Assistant);
+        var seen = new Reports();
+
+        await world.As(Alice).RunAssistantAsync(TeamA, raised.Id, seen);
+
+        Assert.Equal("", seen.Items[0].AnswerSoFar);
+        Assert.NotNull(seen.Items[0].StartedAt);
+    }
+
+    [Fact]
+    public async Task HowLongTheAssistantTook_IsKeptWithTheAnswer_EvenWhenTheProviderReportedNoTokens()
+    {
+        var responder = Substitute.For<ISupportResponder>();
+        responder.AnswerAsync(Arg.Any<SupportCase>(), Arg.Any<IReadOnlyList<SupportMessage>>(), Arg.Any<CancellationToken>()).Returns(SupportAnswer.FromBody("Done."));
+        var world = new World(responder);
+        var raised = await world.As(Alice).RaiseCaseAsync(TeamA, null, Question, SupportAssistance.Assistant);
+
+        await world.As(Alice).RunAssistantAsync(TeamA, raised.Id);
+
+        var usage = (await world.As(Alice).GetMessagesAsync(TeamA, raised.Id)).Items[^1].AssistantUsage;
+        Assert.NotNull(usage.Elapsed);
+        Assert.Equal(0, usage.TotalTokens);
+    }
+
+    [Fact]
+    public async Task TheTimeIsKeptBesideTheTokens_WhenTheProviderReportedThem()
+    {
+        var responder = Substitute.For<ISupportResponder>();
+        responder.AnswerAsync(Arg.Any<SupportCase>(), Arg.Any<IReadOnlyList<SupportMessage>>(), Arg.Any<CancellationToken>())
+            .Returns(SupportAnswer.FromBody("Done.") with { Usage = new SupportAssistantUsage { TotalTokens = 830 } });
+        var world = new World(responder);
+        var raised = await world.As(Alice).RaiseCaseAsync(TeamA, null, Question, SupportAssistance.Assistant);
+
+        await world.As(Alice).RunAssistantAsync(TeamA, raised.Id);
+
+        var usage = (await world.As(Alice).GetMessagesAsync(TeamA, raised.Id)).Items[^1].AssistantUsage;
+        Assert.Equal(830, usage.TotalTokens);
+        Assert.NotNull(usage.Elapsed);
+    }
+
+    [Fact]
     public async Task RunningTheAssistant_WithSomebodyWatching_ReportsTheAnswer_AndAppendsIt()
     {
         var world = new World(Responder(new StreamingChatClient("Check ", "the date.")));

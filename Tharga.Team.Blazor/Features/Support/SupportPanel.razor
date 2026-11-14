@@ -152,7 +152,7 @@
                     else if (_busy)
                     {
                         <div class="support-panel__msg support-panel__msg--them" data-working>
-                            <SupportTypingDots Label="@SupportAssistantSteps.Describe(_text, _progress, _text[SupportPanelText.Working])" ShowLabel="true" />
+                            <SupportAssistantStatus Text="_text" Progress="_progress" Working="@_text[SupportPanelText.Working]" />
                         </div>
                     }
                 </div>
@@ -283,9 +283,9 @@
     </button>;
 
     // Under text already written, when the model looks something up part way through.
-    private RenderFragment Step => SupportAssistantSteps.Running(_text, _progress) is not { } step
+    private RenderFragment Step => SupportAssistantSteps.Running(_text, _progress) is null
         ? null
-        : @<span class="support-panel__step" data-step><SupportTypingDots Label="@step" ShowLabel="true" /></span>;
+        : @<span class="support-panel__step" data-step><SupportAssistantStatus Text="_text" Progress="_progress" Step="true" /></span>;
 
     private string WhoClass(bool support) => support == _support ? "support-panel__who-pick support-panel__who-pick--on" : "support-panel__who-pick";
 

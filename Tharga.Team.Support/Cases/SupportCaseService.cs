@@ -166,7 +166,12 @@ internal sealed class SupportCaseService(
 
         // A test double does not run the streaming default and answers nothing; it is then asked as it always was.
         var started = timeProvider.GetTimestamp();
-        var answer = progress == null ? null : await responder.AnswerAsync(supportCase, transcript.Items, progress, cancellationToken);
+
+        // Every report carries when the assistant started, so whoever is watching counts up from the real start. The responder reports as it begins, before the
+        // model has said anything, so the count starts there; one that cannot stream reports nothing, as it always did.
+        var timed = progress == null ? null : new StartedProgress(progress, timeProvider.GetUtcNow().UtcDateTime);
+
+        var answer = timed == null ? null : await responder.AnswerAsync(supportCase, transcript.Items, timed, cancellationToken);
         answer ??= await responder.AnswerAsync(supportCase, transcript.Items, cancellationToken);
         await RecordUsageAsync(supportCase, answer, timeProvider.GetElapsedTime(started), cancellationToken);
 
@@ -184,7 +189,8 @@ internal sealed class SupportCaseService(
             Body = answer.Body,
             SentAt = timeProvider.GetUtcNow().UtcDateTime,
             AssistantCalls = BoundedCalls(answer.Calls),
-            AssistantUsage = answer.Usage
+            // The time taken is kept with the answer, beside its tokens; an answer the provider reported no tokens for still says how long it took.
+            AssistantUsage = (answer.Usage ?? new SupportAssistantUsage()) with { Elapsed = timeProvider.GetElapsedTime(started) }
         };
 
         await store.AppendMessageAsync(teamKey, caseId, message, cancellationToken);

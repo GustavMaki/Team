@@ -1,0 +1,43 @@
+@using Tharga.Team.Blazor.Framework
+@implements IDisposable
+
+@* What the assistant is doing, beside its dots: "Working 2 (1m 23s)", with the time counting up each second from when it started on the question, not from
+   when this page was opened. Without a start on the progress it is the label it always was and nothing ticks. *@
+
+<SupportTypingDots Label="@Label" ShowLabel="true" />
+
+@code {
+    /// <summary>The text catalogue holding <c>SupportTranscriptText</c>.</summary>
+    [Parameter, EditorRequired] public TextSet Text { get; set; }
+
+    /// <summary>How far the assistant has got; its start is what the time counts from.</summary>
+    [Parameter] public SupportAssistantProgress Progress { get; set; }
+
+    /// <summary>The label before the assistant has gone round the tool loop.</summary>
+    [Parameter] public string Working { get; set; }
+
+    /// <summary>Whether this is the line under text already written, which says only that a service call runs; otherwise it is the main label.</summary>
+    [Parameter] public bool Step { get; set; }
+
+    [Inject] private IServiceProvider Services { get; set; }
+
+    private ITimer _timer;
+    private TimeProvider _time;
+
+    private TimeProvider Time => _time ??= Services.GetService(typeof(TimeProvider)) as TimeProvider ?? TimeProvider.System;
+
+    private string Label => Step
+        ? SupportAssistantSteps.Running(Text, Progress, Now())
+        : SupportAssistantSteps.Describe(Text, Progress, Working, Now());
+
+    private DateTime? Now() => Progress?.StartedAt == null ? null : Time.GetUtcNow().UtcDateTime;
+
+    protected override void OnParametersSet()
+    {
+        // One tick a second while there is a start to count from, and none otherwise, so a label that never changes costs nothing.
+        if (Progress?.StartedAt != null && _timer == null)
+            _timer = Time.CreateTimer(_ => _ = InvokeAsync(StateHasChanged), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}
