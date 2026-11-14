@@ -207,7 +207,7 @@
                 @{ var step = SupportAssistantSteps.Running(_text, AssistantProgress); }
                 @if (string.IsNullOrEmpty(AssistantProgress?.AnswerSoFar))
                 {
-                    <SupportTypingDots Label="@SupportAssistantSteps.Describe(_text, AssistantProgress, ThinkingText)" ShowLabel="true" />
+                    <SupportAssistantStatus Text="_text" Progress="AssistantProgress" Working="@ThinkingText" />
                 }
                 else
                 {
@@ -217,7 +217,7 @@
                     @* Under text already written, when the model looks something up part way through. *@
                     @if (step != null)
                     {
-                        <div class="rz-mt-1" data-step><SupportTypingDots Label="@step" ShowLabel="true" /></div>
+                        <div class="rz-mt-1" data-step><SupportAssistantStatus Text="_text" Progress="AssistantProgress" Step="true" /></div>
                     }
                 }
             </div>

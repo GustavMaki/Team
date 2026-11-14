@@ -43,6 +43,24 @@ public class SupportAssistantCallMappingTests
     }
 
     [Fact]
+    public void HowLongTheAssistantTook_RoundTrips_ToTheMillisecond()
+    {
+        var stored = MongoSupportCaseStore.ToEntity(Answer() with { AssistantUsage = new SupportAssistantUsage { TotalTokens = 830, Elapsed = TimeSpan.FromMilliseconds(83_250) } });
+
+        Assert.Equal(83_250, stored.AssistantUsage.ElapsedMs);
+        Assert.Equal(TimeSpan.FromMilliseconds(83_250), MongoSupportCaseStore.ToMessage(stored).AssistantUsage.Elapsed);
+    }
+
+    [Fact]
+    public void AnAnswerKeptBeforeTheTimeWasRecorded_ReadsWithNone_AndStoresNoField()
+    {
+        var stored = MongoSupportCaseStore.ToEntity(Answer() with { AssistantUsage = new SupportAssistantUsage { TotalTokens = 830 } });
+
+        Assert.Null(MongoSupportCaseStore.ToMessage(stored).AssistantUsage.Elapsed);
+        Assert.False(stored.AssistantUsage.ToBsonDocument().Contains(nameof(SupportAssistantUsageEntity.ElapsedMs)));
+    }
+
+    [Fact]
     public void AnEntryWithoutTokens_StoresNone()
     {
         var stored = MongoSupportCaseStore.ToEntity(Answer());

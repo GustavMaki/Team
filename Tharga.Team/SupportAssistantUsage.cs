@@ -26,4 +26,7 @@ public sealed record SupportAssistantUsage
 
     /// <summary>The model that answered, as the provider named it; null when neither the provider nor the client says.</summary>
     public string Model { get; init; }
+
+    /// <summary>How long the assistant took on the answer, from starting on the question to having it; null for an answer kept before this was recorded.</summary>
+    public TimeSpan? Elapsed { get; init; }
 }

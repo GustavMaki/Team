@@ -1772,6 +1772,13 @@ all of it:
 var answered = await cases.RunAssistantAsync(teamKey, caseId, new Progress<SupportAssistantProgress>(p => Show(p.AnswerSoFar, p.Tools, p.Calls)));
 ```
 
+- **How long it has been working** is shown beside the dots, counting up each second: *Working 2 (1m 23s)*, or *Working 2 (23s)* under a
+  minute. Each report carries `StartedAt`, set by the service when it began on the question, so a display counts from the real start and not
+  from when a page was opened. It is one translatable text with the pass and the time as placeholders, `team.support.transcript.workingLoopTimed`
+  (*Working {0} ({1})*, in Swedish *Arbetar {0} ({1})*), and the time is worded by `team.support.transcript.elapsedSeconds` (*{0}s*) and
+  `elapsedMinutes` (*{0}m {1}s*). The same time is kept with the answer as `SupportAssistantUsage.Elapsed` and shown under it beside its service
+  calls and tokens, *2 service calls · 830 tokens · 1m 23s*, also when the provider reported no tokens. `SupportAssistantStatus` is the component that
+  ticks, if you build your own display.
 - **A round is one call to the model.** The model either writes or asks for tools; when their results go back, the next
   round starts. An answer that looks something up takes two rounds or more, which the tool loop of
   `UseFunctionInvocation` runs for you.

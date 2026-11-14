@@ -28,4 +28,10 @@ public sealed record SupportAssistantProgress
 
     /// <summary>Every service call the model has asked for in this answer so far, in order, the ones running now included.</summary>
     public SupportAssistantCall[] Calls { get; init; } = [];
+
+    /// <summary>
+    /// When the assistant started on the question, in UTC, so a display can count up from the real start and not from when a page was opened. Set by the
+    /// service that runs the assistant on every report; null from a responder run on its own.
+    /// </summary>
+    public DateTime? StartedAt { get; init; }
 }

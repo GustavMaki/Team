@@ -37,6 +37,24 @@ public static class SupportTranscriptText
     /// <summary>Before the assistant's dots once it has gone round the tool loop: <c>{0}</c> is how many times it has. The dots stand for the "…".</summary>
     public static readonly TextKey WorkingLoop = new("team.support.transcript.workingLoop", "Working {0}");
 
+    /// <summary>
+    /// <see cref="WorkingLoop"/> with how long the assistant has been at it: <c>{0}</c> is how many times it has gone round, <c>{1}</c> the time as the two
+    /// texts below make it, such as "1m 23s". One text, so a translation puts both where its language wants them.
+    /// </summary>
+    public static readonly TextKey WorkingLoopTimed = new("team.support.transcript.workingLoopTimed", "Working {0} ({1})");
+
+    /// <summary><see cref="ThinkingLoop"/> with the time: <c>{0}</c> is how many times it has gone round, <c>{1}</c> the time.</summary>
+    public static readonly TextKey ThinkingLoopTimed = new("team.support.transcript.thinkingLoopTimed", "Thinking {0} ({1})");
+
+    /// <summary>Any other label of the assistant's dots with the time after it: <c>{0}</c> is the label, <c>{1}</c> the time.</summary>
+    public static readonly TextKey Timed = new("team.support.transcript.timed", "{0} ({1})");
+
+    /// <summary>A time under a minute: <c>{0}</c> is the seconds.</summary>
+    public static readonly TextKey ElapsedSeconds = new("team.support.transcript.elapsedSeconds", "{0}s");
+
+    /// <summary>A time of a minute or more: <c>{0}</c> is the minutes, <c>{1}</c> the seconds left over.</summary>
+    public static readonly TextKey ElapsedMinutes = new("team.support.transcript.elapsedMinutes", "{0}m {1}s");
+
     /// <summary>Beside the assistant's dots while a reasoning model thinks, before it writes or asks for tools. The dots stand for the "…".</summary>
     public static readonly TextKey Thinking = new("team.support.transcript.thinking", "Thinking");
 
@@ -81,7 +99,7 @@ public static class SupportTranscriptText
     /// <summary>Every key here, for the component building its <see cref="TextSet"/>.</summary>
     public static readonly TextKey[] All =
     [
-        ClosedBecause, Assistant, Support, NotSentYet, NotDelivered, SendAgain, Typing, WorkingLoop, Thinking, ThinkingLoop, ServiceCall, ServiceCalls, Tokens, TokensInOut,
+        ClosedBecause, Assistant, Support, NotSentYet, NotDelivered, SendAgain, Typing, WorkingLoop, WorkingLoopTimed, Thinking, ThinkingLoop, ThinkingLoopTimed, Timed, ElapsedSeconds, ElapsedMinutes, ServiceCall, ServiceCalls, Tokens, TokensInOut,
         Helpful, NotHelpful, RatedHelpful, RatedNotHelpful, NoAnswerYet, NoAnswerAway
     ];
 }
