@@ -80,6 +80,7 @@ public static class ThargaBlazorRegistration
         if (o._teamService != null)
         {
             services.AddScoped<ITeamStateService, TeamStateService>();
+            services.TryAddScoped<ITeamEntryService, TeamEntryService>();
 
             // Scoped, like every other Blazor-side service here. It re-resolves the caller's real grant
             // per request rather than reading the (possibly reduced) principal, so it must not be a
@@ -286,6 +287,10 @@ public static class ThargaBlazorRegistration
             // Server-side claims enrichment — always registered, reads selected_team_id cookie.
             // The membership/consent claim computation is shared with the in-circuit revalidator below.
             services.AddHttpContextAccessor();
+            services.TryAddSingleton(TimeProvider.System);
+            services.TryAddSingleton<TeamEntryCache>();
+            services.TryAddSingleton<ITeamEntryGuardState>(sp => sp.GetRequiredService<TeamEntryCache>());
+            services.TryAddScoped<TeamEntryEvaluator>();
             services.TryAddScoped<TeamMembershipClaimsBuilder>();
             services.AddTransient<IClaimsTransformation, TeamServerClaimsTransformation>();
 

@@ -22,17 +22,20 @@ internal sealed class TeamMembershipClaimsBuilder
     private readonly IUserService _userService;
     private readonly ThargaBlazorOptions _options;
     private readonly TeamGrantResolver _resolver;
+    private readonly TeamEntryEvaluator _entry;
 
     public TeamMembershipClaimsBuilder(
         ITeamService teamService,
         IUserService userService,
         IOptions<ThargaBlazorOptions> options,
         IScopeRegistry scopeRegistry = null,
-        ITenantRoleService tenantRoleService = null)
+        ITenantRoleService tenantRoleService = null,
+        TeamEntryEvaluator entry = null)
     {
         _userService = userService;
         _options = options.Value;
         _resolver = new TeamGrantResolver(teamService, scopeRegistry, tenantRoleService);
+        _entry = entry;
     }
 
     /// <param name="principal">The caller.</param>
@@ -60,6 +63,12 @@ internal sealed class TeamMembershipClaimsBuilder
         // issued for any of them: with one, service-layer checks would treat the caller as being in the
         // team regardless of holding no scopes there.
         if (grant == null)
+            return claims;
+
+        // The host's rule for who may work in this team now, asked only of someone who is allowed in at all. Enforced here, where the claims are built, so
+        // the HTTP request, the circuit's revalidation and a team switch all agree, and a team picked by setting the cookie by hand is refused as well: a
+        // refused team is not issued, so the caller has no team selected rather than one they may not use. With no guard registered this is skipped.
+        if (_entry is { Active: true } && !(await _entry.EvaluateAsync(principal, user?.Key, teamKey)).Allowed)
             return claims;
 
         claims.Add(new Claim(TeamClaimTypes.TeamKey, teamKey));

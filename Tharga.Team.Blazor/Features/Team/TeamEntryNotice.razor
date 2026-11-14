@@ -1,0 +1,54 @@
+@using Tharga.Team.Blazor.Framework
+@implements IDisposable
+@inject ITeamEntryService TeamEntry
+@inject IThargaTextProvider TextProvider
+
+@*
+    Explains why the team the caller asked for is not theirs to work in yet, and what to do about it.
+
+    The host's ITeamEntryGuard decides; this is only the explanation. The server does not issue a refused team's claims, so security does not depend on
+    this component being on the page. It renders nothing unless a team was refused, so it is safe to leave in the layout above @Body permanently, as
+    SuspendedTeamNotice is.
+*@
+
+@if (_refusal != null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false" Icon="lock"
+                 Title="@(Title ?? _text[TeamEntryText.Title])" data-team-entry-notice="@_refusal.TeamKey">
+        <RadzenText TextStyle="TextStyle.Body1" data-team-entry-reason>@(_refusal.Decision.Reason ?? _text[TeamEntryText.DefaultReason])</RadzenText>
+        @if (_refusal.Decision.Outcome == TeamEntryOutcome.StepUp)
+        {
+            <RadzenButton Text="@_text[TeamEntryText.Continue]" Icon="arrow_forward" Click="@(() => TeamEntry.StepUp(_refusal))" data-team-entry-step-up />
+        }
+        @if (ChildContent != null)
+        {
+            @ChildContent
+        }
+    </RadzenAlert>
+}
+
+@code {
+    /// <summary>Heading. Override to match the host's vocabulary for teams.</summary>
+    [Parameter] public string Title { get; set; }
+
+    /// <summary>Optional extra content, such as who to contact.</summary>
+    [Parameter] public RenderFragment ChildContent { get; set; }
+
+    private TeamEntryRefusal _refusal;
+    private TextSet _text = TextSet.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _text = await TextProvider.ResolveAsync(TeamEntryText.All);
+        _refusal = TeamEntry.Refusal;
+        TeamEntry.RefusalChanged += OnRefusalChanged;
+    }
+
+    private void OnRefusalChanged(object sender, TeamEntryRefusal refusal)
+    {
+        _refusal = refusal;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => TeamEntry.RefusalChanged -= OnRefusalChanged;
+}

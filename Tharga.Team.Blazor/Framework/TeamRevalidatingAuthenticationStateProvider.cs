@@ -22,11 +22,50 @@ internal sealed class TeamRevalidatingAuthenticationStateProvider : Revalidating
     public TeamRevalidatingAuthenticationStateProvider(
         ILoggerFactory loggerFactory,
         IServiceScopeFactory scopeFactory,
-        IOptions<ThargaBlazorOptions> options)
+        IOptions<ThargaBlazorOptions> options,
+        TeamEntryCache entryCache = null)
         : base(loggerFactory)
     {
         _scopeFactory = scopeFactory;
         _interval = options.Value.ClaimRevalidation.Interval;
+        _entryCache = entryCache;
+
+        // The host tells the library a guard's answer changed: this circuit re-evaluates at once, not at the next interval.
+        if (_entryCache != null) _entryCache.Invalidated += OnEntryInvalidated;
+    }
+
+    private readonly TeamEntryCache _entryCache;
+
+    /// <summary>
+    /// Brings this circuit's team claims up to date now, when the answer that changed is for its own user. Never throws: it runs on whatever thread told the
+    /// library, and a failure leaves the next interval to catch up.
+    /// </summary>
+    private async void OnEntryInvalidated(object sender, TeamEntryInvalidatedEventArgs e)
+    {
+        try
+        {
+            var state = await GetAuthenticationStateAsync();
+            if (state.User.Identity?.IsAuthenticated != true) return;
+
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var users = scope.ServiceProvider.GetService<IUserService>();
+            var user = users == null ? null : await users.GetCurrentUserAsync(state.User, recordActivity: false);
+            if (user?.Key == null || user.Key != e.UserKey) return;
+
+            var refreshed = await scope.ServiceProvider.GetRequiredService<TeamClaimRevalidator>().TryRefreshAsync(state.User);
+            if (refreshed != null) SetAuthenticationState(Task.FromResult(new AuthenticationState(refreshed)));
+        }
+        catch
+        {
+            // The next interval retries.
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && _entryCache != null) _entryCache.Invalidated -= OnEntryInvalidated;
+
+        base.Dispose(disposing);
     }
 
     protected override TimeSpan RevalidationInterval => _interval;
