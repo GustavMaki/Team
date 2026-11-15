@@ -19,6 +19,10 @@ A suite of NuGet packages for building multi-tenant Blazor applications with tea
 | [Tharga.Team.Support.OpenAI](https://www.nuget.org/packages/Tharga.Team.Support.OpenAI) | Lets a team connect the support assistant to its own OpenAI key, or its own Ollama or llama.cpp server, over the OpenAI-compatible API (OpenAI SDK) | No |
 | [Tharga.Team.Mcp](https://www.nuget.org/packages/Tharga.Team.Mcp) | MCP (Model Context Protocol) bridge — auth, scopes, audit for MCP tools. Renamed from `Tharga.Platform.Mcp`, which is deprecated and frozen at 3.5.x | No |
 
+## Supported frameworks
+
+Every package targets `net10.0` and `net11.0`. A `net10.0` host resolves the 10.x line of the Microsoft.* packages and a `net11.0` host the 11.x line, so taking Tharga.Team on .NET 10 never pulls in a .NET 11 package.
+
 ## Dependency graph
 
 ```

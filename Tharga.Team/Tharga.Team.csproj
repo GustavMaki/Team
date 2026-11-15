@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Authors>Daniel Bohlin</Authors>
     <Company>Thargelion AB</Company>
@@ -57,15 +57,12 @@
     <InternalsVisibleTo Include="Tharga.Team.MongoDB.Tests" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Held on the 10.x line: no .NET 11 until spring 2027 (shared instructions, standing hold). -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
+    <!-- 10.x on net10.0, 11.x on net11.0: see Directory.Build.props. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="$(MsRuntimeVersion)" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="$(MsRuntimeVersion)" />
     <PackageReference Include="Tharga.Toolkit" Version="1.17.0" />
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="9.0.18" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.15" />
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="$(MsRuntimeVersion)" />
   </ItemGroup>
 </Project>

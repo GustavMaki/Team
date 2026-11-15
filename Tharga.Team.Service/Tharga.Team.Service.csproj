@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Authors>Daniel Bohlin</Authors>
     <Company>Thargelion AB</Company>
@@ -35,19 +35,16 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" PrivateAssets="all" />
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.18" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="$(MsRuntimeVersion)" />
   </ItemGroup>
   <ItemGroup>
     <!--
-      Held at 10.3.1. Swashbuckle 11 requires Microsoft.OpenApi 3.x; Microsoft.AspNetCore.OpenApi 10.0.15 requires
-      2.x below 3.0, so restore fails with NU1107 in every project that references this one. Lift the hold when
+      Held at 10.3.1 on net10.0 (11.x on net11.0, see Directory.Build.props). Swashbuckle 11 requires Microsoft.OpenApi 3.x; Microsoft.AspNetCore.OpenApi 10.0.15 requires
+      2.x below 3.0, so restore fails with NU1107 in every net10.0 project that references this one. Lift the net10.0 hold when
       Microsoft.AspNetCore.OpenApi moves to Microsoft.OpenApi 3.
     -->
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="$(SwashbuckleVersion)" />
     <PackageReference Include="Tharga.MongoDB" Version="2.19.2" />
     <!--
       The one HTML sanitizer: formatted text is kept and shown only as its allow-listed output, on every way in
