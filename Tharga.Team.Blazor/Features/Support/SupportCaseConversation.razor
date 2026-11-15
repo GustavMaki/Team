@@ -12,7 +12,7 @@
     @* Support reads who wrote and may add its own content, for as long as the case is open to them: also once it has a team. *@
     @if (AsStaff)
     {
-        <SupportContactTable Contact="Case.ExternalContact" CaseId="@Case.Id" />
+        <SupportContactTable Contact="Case.ExternalContact" CaseId="@Case.Id" TimeTemplate="TimeTemplate" />
         @Extras?.Invoke(Case)
     }
 

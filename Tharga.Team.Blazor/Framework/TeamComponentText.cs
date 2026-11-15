@@ -16,6 +16,9 @@ public static class TeamComponentText
     /// <summary>Grid paging summary. <c>{0}</c> first row, <c>{1}</c> last row, <c>{2}</c> total.</summary>
     public static readonly TextKey PagingSummary = new("team.component.pagingSummary", "Showing {0}-{1} of {2}");
 
+    /// <summary>The label beside the grid's page-size picker.</summary>
+    public static readonly TextKey PageSize = new("team.component.pageSize", "items per page");
+
     public static readonly TextKey ColumnTeam = new("team.component.columnTeam", "Team");
     public static readonly TextKey ColumnYourAccess = new("team.component.columnYourAccess", "Your access");
     public static readonly TextKey YourAccessTooltip = new("team.component.yourAccessTooltip", "Your access level on this team.");
@@ -155,7 +158,7 @@ public static class TeamComponentText
     /// <summary>Every key here, for the component building its <see cref="TextSet"/>.</summary>
     public static readonly TextKey[] All =
     [
-        PagingSummary, ColumnTeam, ColumnYourAccess, YourAccessTooltip, YourConsentAccessTooltip, ColumnConsent, ColumnMembers,
+        PagingSummary, PageSize, ColumnTeam, ColumnYourAccess, YourAccessTooltip, YourConsentAccessTooltip, ColumnConsent, ColumnMembers,
         NoTeamsCanCreate, NoTeams, CreateTeam, RenameTitle, IconTitle, InviteUserTitle, InvitationSent,
         EmailSentTo, EmailFailed, CouldNotSendEmail, InviteLinkCopied, ConfirmRemoveMember, ConfirmLeaveTeam, MemberNotFound,
         MemberNotFoundDetail, NoEligibleMembers, NoEligibleMembersDetail, TransferOwnershipTitle, Transfer,

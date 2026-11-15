@@ -1,4 +1,5 @@
 using Tharga.Team.Blazor.Features.Audit;
+using Tharga.Team.Blazor.Framework;
 
 namespace Tharga.Team.Blazor.Tests;
 
@@ -15,7 +16,7 @@ public class AuditRetentionTextTests
     [InlineData(1)]
     public void WithRetention_NamesTheNumberOfDays(int days)
     {
-        Assert.Equal($"Entries are kept for {days} days, then deleted automatically.", AuditRetentionText.Describe(days));
+        Assert.Equal($"Entries are kept for {days} days, then deleted automatically.", AuditRetentionText.Describe(days, TextSet.Empty));
     }
 
     [Theory]
@@ -25,6 +26,19 @@ public class AuditRetentionTextTests
     [InlineData(-1)]
     public void WithoutRetention_SaysEntriesAreKept(int? days)
     {
-        Assert.Equal("Entries are kept indefinitely.", AuditRetentionText.Describe(days));
+        Assert.Equal("Entries are kept indefinitely.", AuditRetentionText.Describe(days, TextSet.Empty));
+    }
+
+    [Fact]
+    public void ATranslation_ReplacesBothSentences_WithTheDaysWhereTheTranslatorPutThem()
+    {
+        var text = new TextSet(new Dictionary<string, string>
+        {
+            [AuditLogViewText.RetentionDays.Key] = "Posterna sparas i {0} dagar och raderas sedan automatiskt.",
+            [AuditLogViewText.RetentionIndefinite.Key] = "Posterna sparas utan tidsgräns."
+        });
+
+        Assert.Equal("Posterna sparas i 427 dagar och raderas sedan automatiskt.", AuditRetentionText.Describe(427, text));
+        Assert.Equal("Posterna sparas utan tidsgräns.", AuditRetentionText.Describe(null, text));
     }
 }

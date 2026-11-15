@@ -110,6 +110,24 @@ public class SupportContactBoardRenderTests : BunitContext
     }
 
     [Fact]
+    public void WhenConsentWasGiven_IsWrittenByTheHostsTimeTemplate_LikeEveryOtherMomentOnTheBoard()
+    {
+        var view = Queue([Unassigned()], p => p.Add(x => x.TimeTemplate, date => builder => builder.AddContent(0, "host:" + date.ToString("yyyy-MM-dd HH:mm"))));
+        Open(view, "case-1");
+
+        Assert.Equal("host:" + Consent.ToString("yyyy-MM-dd HH:mm"), view.Find("[data-contact-value='consent']").TextContent);
+    }
+
+    [Fact]
+    public void WhenConsentWasGiven_IsWrittenByTheHostsTimeTemplate_OnTheAcrossTeamsBoardToo()
+    {
+        var view = AcrossTeams([Unassigned() with { TeamKey = "acme" }], p => p.Add(x => x.TimeTemplate, date => builder => builder.AddContent(0, "host:" + date.ToString("yyyy-MM-dd HH:mm"))));
+        Open(view, "case-1");
+
+        Assert.Equal("host:" + Consent.ToString("yyyy-MM-dd HH:mm"), view.Find("[data-contact-value='consent']").TextContent);
+    }
+
+    [Fact]
     public void RowsWithNothingInThem_AreLeftOut_ButNoConsentIsSaid()
     {
         var view = Queue([Unassigned(contact: new ExternalSupportContact { Email = "buyer@sample.test" })]);
