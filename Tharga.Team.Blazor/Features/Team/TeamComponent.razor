@@ -93,7 +93,7 @@ else
                                 AllowFiltering="@TeamSelectorGate.ShowFilter(_layoutCount, TeamFilterThreshold, AllowTeamFiltering)"
                                 AllowPaging="@TeamSelectorGate.ShowFilter(_layoutCount, TeamPageSize + 1, AllowTeamPaging)"
                                 FilterMode="FilterMode.Simple" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                PageSize="@TeamPageSize" PageSizeOptions="@TeamPageSizeOptionsValues"
+                                PageSize="@TeamPageSize" PageSizeOptions="@TeamPageSizeOptionsValues" PageSizeText="@_text[TeamComponentText.PageSize]"
                                 ShowPagingSummary="true" PagingSummaryFormat="@_text[TeamComponentText.PagingSummary]"
                                 ExpandMode="DataGridExpandMode.Multiple"
                                 RowRender="@OnTeamRowRender">

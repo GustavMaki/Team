@@ -44,7 +44,7 @@ public partial class AuditLogView : ComponentBase
     /// </summary>
     private string RetentionText
         => AuditRetentionText.Describe(
-            ServiceProvider.GetService<Microsoft.Extensions.Options.IOptions<AuditOptions>>()?.Value.RetentionDays);
+            ServiceProvider.GetService<Microsoft.Extensions.Options.IOptions<AuditOptions>>()?.Value.RetentionDays, _text);
 
     private const int ChartQueryLimit = 5000;
 
