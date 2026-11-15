@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Builder;
+using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
@@ -41,6 +42,10 @@ public static class ThargaBlazorRegistration
         AccessLevelVisibility.Validate(o.HiddenAccessLevels);
 
         services.AddThargaBlazor(bo => bo.Title = o.Title, configuration);
+
+        // The team components inject Blazored's ILocalStorageService. Tharga.Blazor registers it too but has deprecated that
+        // and will drop it, so it is registered here, by the package that uses it. Registering twice is harmless.
+        services.AddBlazoredLocalStorage();
 
         // UI string provider — a consumer-supplied provider (via AddTextProvider) localizes the strings;
         // otherwise the built-in default returns English.
