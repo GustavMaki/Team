@@ -55,6 +55,7 @@ internal sealed class AuditRetentionIndexService : BackgroundService
 
     private async Task ReconcileAsync(CancellationToken cancellationToken)
     {
+        using var access = TeamAccess.Unchecked("Audit retention index: start-up reconciliation of the collection's expiry index, with no caller to authorize.");
         var wanted = AuditRetention.GetExpireAfter(AuditRetention.ResolveDays(_options));
 
         var service = _factory.GetMongoDbService(() => new DatabaseContext { CollectionName = AuditRetentionIndex.CollectionName });

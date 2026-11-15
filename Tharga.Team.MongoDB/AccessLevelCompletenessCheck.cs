@@ -37,6 +37,7 @@ internal sealed class AccessLevelCompletenessCheck<TTeamEntity, TMember>(
         try
         {
             using var scope = serviceProvider.CreateScope();
+            using var access = Tharga.Team.Service.TeamAccess.Unchecked("Access level completeness check at start-up: reads membership to find members with no access level, with no caller to authorize.");
             var collection = scope.ServiceProvider.GetService<ITeamRepositoryCollection<TTeamEntity, TMember>>();
             if (collection == null) return;
 

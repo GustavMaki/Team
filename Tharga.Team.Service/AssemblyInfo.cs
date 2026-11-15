@@ -8,3 +8,10 @@ using System.Runtime.CompilerServices;
 // implementation still compiles. This forward keeps assemblies built against the old location loading, so
 // an upgrade needs no recompilation either.
 [assembly: TypeForwardedTo(typeof(Tharga.Team.Service.ITeamPrincipalAccessor))]
+
+// TeamAccess moved to Tharga.Team for the same reason: the start-up checks in Tharga.Team.MongoDB read team data with no caller to authorize and have to
+// say so, and that package does not reference this one. The namespace is unchanged and these forwards keep assemblies built against the old location
+// loading, so an upgrade needs no recompilation (Tharga/Team#397).
+[assembly: TypeForwardedTo(typeof(Tharga.Team.Service.TeamAccess))]
+[assembly: TypeForwardedTo(typeof(Tharga.Team.Service.TeamAccessKind))]
+[assembly: TypeForwardedTo(typeof(Tharga.Team.Service.TeamAccessContext))]

@@ -53,6 +53,7 @@ internal sealed class UserNoticeSender(
     internal async Task<int> RunOnceAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
+        using var access = Tharga.Team.Service.TeamAccess.Unchecked("User notice sender: background distribution of notices, with no caller to authorize.");
 
         return await scope.ServiceProvider.GetRequiredService<UserNoticeDistributor>().RunAsync(Claimant, cancellationToken);
     }

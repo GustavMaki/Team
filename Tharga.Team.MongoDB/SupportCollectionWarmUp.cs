@@ -48,6 +48,7 @@ internal sealed class SupportCollectionWarmUp(
         try
         {
             using var scope = scopeFactory.CreateScope();
+            using var access = Tharga.Team.Service.TeamAccess.Unchecked("Support collection warm-up at start-up: touches the collections to create their indexes, with no caller to authorize.");
 
             // A read that matches nothing is enough: the cost being avoided is opening the collection and
             // assuring its indexes, not the query.

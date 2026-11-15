@@ -53,6 +53,7 @@ internal sealed class PostmasterRetentionSweep(IServiceScopeFactory scopeFactory
     internal async Task<string[]> SweepAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
+        using var access = Tharga.Team.Service.TeamAccess.Unchecked("Postmaster retention sweep: a background purge with no caller to authorize.");
         var services = scope.ServiceProvider;
 
         var cutoff = time.GetUtcNow().UtcDateTime - options.Value.PostmasterRetention;

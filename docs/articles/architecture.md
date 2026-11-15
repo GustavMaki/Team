@@ -123,6 +123,22 @@ Two rules follow from the sequence above, and both are easy to get wrong:
 The full rules, including the three service categories and what each is marked by, are in the
 [implementation guide](implementation-guide.md).
 
+### Finding database reads that no decision covers
+
+The authorization layer opens a `TeamAccess` scope around a call it has authorized. A database operation made with none is **unscoped**: either it
+reached the database around the authorization layer, which is a hole, or it legitimately has nobody to authorize. Two interceptors for the data layer look
+for them, registered with `builder.AddMongoDB(o => o.AddCollectionInterceptor<...>())`:
+
+- **`TeamAccessReportInterceptor`** logs each distinct unscoped call path once, at warning level, with the collection, the operation and the frames that led
+  to it, and lets the call through. It is safe on a running site: run the whole site against it and read the log. This is how to find what an enforcing
+  interceptor would refuse, and how a host checks its own repositories.
+- **`TeamAccessInterceptor`** rejects an unscoped call. **It is not enforced by default and is not safe to register as is**: the central services' reads pass
+  through their authorization decorators and never open a database scope, so it would reject nearly every page. It is for a host that has declared its own paths.
+
+**A background worker has no caller, so what it reads is unauthorized by definition and has to say so**: `using var _ = TeamAccess.Unchecked("reason")`
+(or `System`) before the first read, greppable and reviewable. Every worker in this repo that reads the database does, and a test fails the build if a new
+background worker neither declares its access nor is listed as one that reads no team data, with the reason. A host's own workers should do the same.
+
 ## Hosting
 
 Server-hosted Blazor calls the domain in-process, through the same gate a remote transport would. **Which
