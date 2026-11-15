@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Authors>Daniel Bohlin</Authors>
     <Company>Thargelion AB</Company>
@@ -33,11 +33,11 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <!-- Held on the 10.x line: no .NET 11 until spring 2027 (shared instructions, standing hold). -->
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.11.0" />
+    <!-- 10.x on net10.0, 11.x on net11.0: see Directory.Build.props. -->
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="$(MsExtensionsAiVersion)" />
     <PackageReference Include="OpenAI" Version="2.15.0" />
-    <!-- Held on the 10.x line: no .NET 11 until spring 2027 (shared instructions, standing hold). -->
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.15" />
+    <!-- 10.x on net10.0, 11.x on net11.0: see Directory.Build.props. -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="$(MsRuntimeVersion)" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Tharga.Team.Support\Tharga.Team.Support.csproj" />

@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Authors>Daniel Bohlin</Authors>
     <Company>Thargelion AB</Company>
@@ -33,7 +33,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="SkiaSharp" Version="4.156.0" />
+    <PackageReference Include="SkiaSharp" Version="4.156.1" />
     <!--
       The self-contained libSkiaSharp.so, so a Linux host needs no fontconfig or freetype packages.
       Referenced here rather than left to the consumer: a missing native asset builds cleanly and fails
@@ -41,9 +41,9 @@
       The plain SkiaSharp.NativeAssets.Linux variant is smaller but pulls a font stack we never use —
       icons are decoded, scaled and encoded, never drawn with text.
     -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.156.0" />
-    <!-- Held on the 10.x line: no .NET 11 until spring 2027 (shared instructions, standing hold). -->
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.15" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.156.1" />
+    <!-- 10.x on net10.0, 11.x on net11.0: see Directory.Build.props. -->
+    <PackageReference Include="Microsoft.Extensions.Options" Version="$(MsRuntimeVersion)" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Tharga.Team\Tharga.Team.csproj" />

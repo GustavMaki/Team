@@ -1,0 +1,20 @@
+<Project>
+  <!--
+    Tharga.Team targets net10.0 and net11.0. Each target takes the Microsoft.* package line that belongs to it, so no 11.x
+    package reaches a net10.0 consumer (an 11.x reference pulls the whole .NET 11 line into a .NET 10 host). The versions
+    live here so that a dependency update changes one place. Tharga.Team supports .NET 10 until spring 2027.
+  -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <!-- Microsoft.AspNetCore.*, Microsoft.Extensions.* and System.* packages that ship with the runtime. -->
+    <MsRuntimeVersion>10.0.15</MsRuntimeVersion>
+    <!-- Microsoft.Extensions.AI and Microsoft.Extensions.AI.OpenAI are versioned on their own line. -->
+    <MsExtensionsAiVersion>10.11.0</MsExtensionsAiVersion>
+    <!-- Swashbuckle 11 requires Microsoft.OpenApi 3.x, which Microsoft.AspNetCore.OpenApi 10.x does not. -->
+    <SwashbuckleVersion>10.3.1</SwashbuckleVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <MsRuntimeVersion>11.0.0</MsRuntimeVersion>
+    <MsExtensionsAiVersion>11.0.0</MsExtensionsAiVersion>
+    <SwashbuckleVersion>11.0.1</SwashbuckleVersion>
+  </PropertyGroup>
+</Project>
