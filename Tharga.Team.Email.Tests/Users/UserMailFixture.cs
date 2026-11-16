@@ -368,8 +368,12 @@ internal sealed class InMemoryUserMailOutbox : IUserMailOutbox
         return new UserMailItemPage { Items = page, NextCursor = start + pageSize < ordered.Count ? page[^1].Id : null };
     }
 
+    /// <summary>What the database boundary would see when the queue is read: the access declared by whoever is reading, or null when none is.</summary>
+    public List<Tharga.Team.Service.TeamAccessContext> AccessSeenOnClaim { get; } = [];
+
     public Task<UserMailItem> ClaimNextAsync(string claimant, DateTime now, TimeSpan lease, CancellationToken cancellationToken = default)
     {
+        AccessSeenOnClaim.Add(Tharga.Team.Service.TeamAccess.Current);
         lock (_gate)
         {
             var due = _items

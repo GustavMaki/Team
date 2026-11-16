@@ -55,6 +55,7 @@ internal sealed class InvitationRepositoryCheck<TTeamEntity, TMember>(
         try
         {
             using var scope = serviceProvider.CreateScope();
+            using var access = Tharga.Team.Service.TeamAccess.Unchecked("Invitation repository check at start-up: reads to verify the repository is usable, with no caller to authorize.");
             var repository = scope.ServiceProvider.GetService<ITeamRepository<TTeamEntity, TMember>>();
             if (repository == null) return Task.CompletedTask;
 

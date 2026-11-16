@@ -61,6 +61,9 @@ public class MongoDbAuditLogger : BackgroundService, IAuditLogger
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // The writer of the audit log itself: it records what others did and has no caller of its own to authorize.
+        using var access = TeamAccess.Unchecked("Audit writer: background batching of audit entries into the audit collection, with no caller to authorize.");
+
         var collection = _serviceProvider.GetService<IAuditRepositoryCollection>();
         if (collection == null)
         {

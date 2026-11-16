@@ -136,6 +136,7 @@ internal sealed class SupportMailPoller(
     private async Task<int> PollAsync(MailboxReader reader, CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
+        using var access = Tharga.Team.Service.TeamAccess.Unchecked("Support mailbox poll: background reading of the support mailbox into cases, with no caller to authorize.");
         using var logScope = logger?.BeginScope(new Dictionary<string, object> { ["SupportMailbox"] = reader.Mailbox.Name });
 
         var client = ClientFor(scope.ServiceProvider, reader.Mailbox);

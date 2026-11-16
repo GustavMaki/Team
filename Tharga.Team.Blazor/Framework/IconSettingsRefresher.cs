@@ -79,6 +79,7 @@ internal sealed class IconSettingsRefresher(
     private async Task<bool> ApplyStoredAsync(CancellationToken cancellationToken)
     {
         using var scope = serviceProvider.CreateScope();
+        using var access = Tharga.Team.Service.TeamAccess.Unchecked("Icon settings refresh: a background read of the site's own settings, with no caller to authorize.");
         var store = scope.ServiceProvider.GetService<IIconSettingsStore>();
         if (store == null) return false;
 

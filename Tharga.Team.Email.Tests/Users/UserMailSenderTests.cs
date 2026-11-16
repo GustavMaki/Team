@@ -29,6 +29,25 @@ public class UserMailSenderTests
         return (new UserMailSender(services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(), Options.Create(fixture.Options), logger), fixture, logger);
     }
 
+    /// <summary>A background sender has no caller, so what it reads is declared as such where the database boundary can see it (Tharga/Team#397).</summary>
+    [Fact]
+    public async Task TheQueueIsReadUnderADeclaredAccess_NotUnscoped()
+    {
+        var (sender, fixture, _) = Sender(_ => { });
+        await fixture.QueueAsync();
+
+        await sender.RunOnceAsync(default);
+
+        Assert.NotEmpty(fixture.Outbox.AccessSeenOnClaim);
+        Assert.All(fixture.Outbox.AccessSeenOnClaim, x =>
+        {
+            Assert.NotNull(x);
+            Assert.Equal(Tharga.Team.Service.TeamAccessKind.Unchecked, x.Kind);
+            Assert.False(string.IsNullOrWhiteSpace(x.Reason));
+        });
+        Assert.Null(Tharga.Team.Service.TeamAccess.Current);
+    }
+
     [Fact]
     public async Task WithoutASendingAddress_NothingIsSent_AndThatIsLoggedOnce()
     {

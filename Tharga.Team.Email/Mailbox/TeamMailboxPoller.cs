@@ -70,6 +70,7 @@ internal sealed class TeamMailboxPoller(IServiceScopeFactory scopeFactory, IOpti
     internal async Task<int> PollAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
+        using var access = Tharga.Team.Service.TeamAccess.Unchecked("Team mailbox poll: background reading of the mailbox into the postmaster archive, with no caller to authorize.");
 
         var source = scope.ServiceProvider.GetRequiredService<IMailboxSource>();
         if (!source.CanRead) return 0;

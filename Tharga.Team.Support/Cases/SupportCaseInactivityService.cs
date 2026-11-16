@@ -43,6 +43,7 @@ internal sealed class SupportCaseInactivityService(
                 await timer.WaitForNextTickAsync(stoppingToken);
 
                 using var scope = scopeFactory.CreateScope();
+                using var access = Tharga.Team.Service.TeamAccess.Unchecked("Support case inactivity sweep: background closing of idle cases, with no caller to authorize.");
 
                 await scope.ServiceProvider
                     .GetRequiredService<SupportCaseInactivitySweep>()

@@ -64,6 +64,7 @@ internal sealed class UserMailSender(
         if (!CanSend()) return 0;
 
         using var scope = scopeFactory.CreateScope();
+        using var access = Tharga.Team.Service.TeamAccess.Unchecked("User mail sender: background sending of queued mail, with no caller to authorize.");
 
         return await scope.ServiceProvider.GetRequiredService<UserMailDispatcher>().RunAsync(Claimant, cancellationToken);
     }
