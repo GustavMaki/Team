@@ -4,8 +4,8 @@ using Tharga.Team;
 namespace Tharga.Team.Service.Audit;
 
 /// <summary>
-/// Audit entries for the two events that happen outside any service call: an interactive sign-in, and the
-/// user record created as a side effect of a first one.
+/// Audit entries for the events that happen outside any service call: an interactive sign-in, the user record
+/// created as a side effect of a first one, and the server-side session's sign-out and ends (Tharga/Team#471).
 /// </summary>
 /// <remarks>
 /// <b>Why these were missing.</b> Every other audited action passes through a service the auditing decorators
@@ -26,6 +26,90 @@ public static class AuthAuditEntries
     public const string SignInAction = "signin";
     public const string UserCreatedAction = "user-created";
     public const string UserProfileRefreshedAction = "user-profile-refreshed";
+    public const string SignOutAction = "signout";
+    public const string SessionEndedAction = "session-ended";
+    public const string SessionSupersededAction = "session-superseded";
+
+    /// <summary>The metadata key the reason a session ended is recorded under, by name (<see cref="SessionEndReason"/>).</summary>
+    public const string SessionReasonKey = "session.reason";
+
+    /// <summary>A person signing out, which ended their server-side session (Tharga/Team#471).</summary>
+    /// <remarks>
+    /// Audited only when sessions are on, and only by the call that ended the session, so two tabs signing out at once leave one entry. Like
+    /// <see cref="SignIn(ClaimsPrincipal)"/> it names no team, and like every session entry it never names the session: its id is a key.
+    /// </remarks>
+    public static AuditEntry SignOut(ClaimsPrincipal principal)
+        => SignOut(principal, UserIdentityResolver.Default);
+
+    /// <summary>A sign-out, with the subject read by the host's identity resolver.</summary>
+    public static AuditEntry SignOut(ClaimsPrincipal principal, UserIdentityResolver identityResolver)
+        => new()
+        {
+            Timestamp = DateTime.UtcNow,
+            EventType = AuditEventType.AuthSuccess,
+            Feature = Feature,
+            Action = SignOutAction,
+            MethodName = nameof(SignOut),
+            Success = true,
+            CallerType = AuditCallerType.User,
+            CallerSource = AuditCallerSource.Web,
+            CallerIdentity = Identity(principal),
+            CallerUserIdentity = (identityResolver ?? UserIdentityResolver.Default).GetSubject(principal)
+        };
+
+    /// <summary>A person's server-side session ending other than by their signing out: a limit of the host's, or a newer sign-in taking the team.</summary>
+    /// <remarks>
+    /// Audited once, by the request that ended it, however many requests the ended session goes on to make; the reason is in the metadata under
+    /// <see cref="SessionReasonKey"/>. Recorded as an auth event that happened rather than as a failure: nobody's credentials failed.
+    /// </remarks>
+    public static AuditEntry SessionEnded(ClaimsPrincipal principal, SessionEndReason reason)
+        => SessionEnded(principal, reason, UserIdentityResolver.Default);
+
+    /// <summary>A session ending, with the subject read by the host's identity resolver.</summary>
+    public static AuditEntry SessionEnded(ClaimsPrincipal principal, SessionEndReason reason, UserIdentityResolver identityResolver)
+        => new()
+        {
+            Timestamp = DateTime.UtcNow,
+            EventType = AuditEventType.AuthSuccess,
+            Feature = Feature,
+            Action = SessionEndedAction,
+            MethodName = nameof(SessionEnded),
+            Success = true,
+            CallerType = AuditCallerType.User,
+            CallerSource = AuditCallerSource.Web,
+            CallerIdentity = Identity(principal),
+            CallerUserIdentity = (identityResolver ?? UserIdentityResolver.Default).GetSubject(principal),
+            Metadata = new Dictionary<string, string>(StringComparer.Ordinal) { [SessionReasonKey] = reason.ToString() }
+        };
+
+    /// <summary>An older session of a person ended because a newer sign-in of theirs entered a team that allows one session at a time.</summary>
+    /// <remarks>
+    /// Written by the newer session's request, so there is no principal for the older one: the person is named by the subject and user key the session
+    /// was started with, and the team is the one it was in.
+    /// </remarks>
+    public static AuditEntry SessionSuperseded(UserSession superseded)
+        => new()
+        {
+            Timestamp = DateTime.UtcNow,
+            EventType = AuditEventType.AuthSuccess,
+            Feature = Feature,
+            Action = SessionSupersededAction,
+            MethodName = nameof(SessionSuperseded),
+            Success = true,
+            CallerType = AuditCallerType.User,
+            CallerSource = AuditCallerSource.Web,
+            CallerUserIdentity = superseded?.Subject,
+            TeamKey = superseded?.ActiveTeamKey,
+            Metadata = Superseded(superseded)
+        };
+
+    private static Dictionary<string, string> Superseded(UserSession session)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal) { [SessionReasonKey] = nameof(SessionEndReason.NewerSignIn) };
+        if (!string.IsNullOrEmpty(session?.UserKey)) metadata["user.key"] = session.UserKey;
+
+        return metadata;
+    }
 
     /// <summary>An interactive sign-in completing.</summary>
     /// <remarks>

@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Builder;
+using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Http;
@@ -41,6 +43,10 @@ public static class ThargaBlazorRegistration
         AccessLevelVisibility.Validate(o.HiddenAccessLevels);
 
         services.AddThargaBlazor(bo => bo.Title = o.Title, configuration);
+
+        // The team components inject Blazored's ILocalStorageService. Tharga.Blazor registers it too but has deprecated that
+        // and will drop it, so it is registered here, by the package that uses it. Registering twice is harmless.
+        services.AddBlazoredLocalStorage();
 
         // UI string provider — a consumer-supplied provider (via AddTextProvider) localizes the strings;
         // otherwise the built-in default returns English.
@@ -291,6 +297,7 @@ public static class ThargaBlazorRegistration
             services.TryAddSingleton<TeamEntryCache>();
             services.TryAddSingleton<ITeamEntryGuardState>(sp => sp.GetRequiredService<TeamEntryCache>());
             services.TryAddScoped<TeamEntryEvaluator>();
+            RegisterSessions(services, o.Sessions);
             services.TryAddScoped<TeamMembershipClaimsBuilder>();
             services.AddTransient<IClaimsTransformation, TeamServerClaimsTransformation>();
 
@@ -378,6 +385,52 @@ public static class ThargaBlazorRegistration
         RegisterEmail(services, o);
 
         services.AddSingleton(Options.Create(o));
+    }
+
+    /// <summary>
+    /// Server-side sessions (Tharga/Team#471): everything is registered, and nothing is active until the host registers an <see cref="ISessionPolicy"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>The evaluator is built here rather than by the container</b>, because what it needs depends on what the host registered: with no policy it gets
+    /// no session service and costs nothing, and with a policy but no store it still resolves, so the startup check, not a resolve error on some request,
+    /// is what names the missing store.
+    /// <para>
+    /// <b>The check is chained into the cookie scheme with <c>PostConfigure</c></b>, so it wraps whatever handler the host or <c>AddThargaAuth</c>
+    /// configured, in whichever order they were registered. A host's <c>EventsType</c> would silently replace it, which <see cref="SessionWiringCheck"/>
+    /// refuses at startup.
+    /// </para>
+    /// </remarks>
+    private static void RegisterSessions(IServiceCollection services, SessionOptions sessions)
+    {
+        services.TryAddSingleton<SessionCache>();
+        services.TryAddScoped<UserSessionService>();
+        services.TryAddScoped<IUserSessionService>(sp => sp.GetRequiredService<UserSessionService>());
+        services.TryAddScoped(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<ThargaBlazorOptions>>();
+            var policy = sp.GetService<ISessionPolicy>();
+            var usable = policy != null && options.Value.Sessions?.Enabled == true && sp.GetRequiredService<IServiceProviderIsService>().IsService(typeof(IUserSessionStore));
+
+            return new SessionEvaluator(
+                sp.GetRequiredService<SessionCache>(),
+                options,
+                sp.GetRequiredService<TimeProvider>(),
+                policy,
+                usable ? sp.GetRequiredService<UserSessionService>() : null,
+                sp.GetService<ILogger<SessionEvaluator>>());
+        });
+
+        services.PostConfigure<CookieAuthenticationOptions>(sessions?.CookieScheme ?? CookieAuthenticationDefaults.AuthenticationScheme, cookie =>
+        {
+            cookie.Events ??= new CookieAuthenticationEvents();
+            cookie.Events.OnValidatePrincipal = SessionCookieEvents.Chain(cookie.Events.OnValidatePrincipal);
+            cookie.Events.OnRedirectToLogin = SessionCookieEvents.ChainRedirectToLogin(cookie.Events.OnRedirectToLogin);
+        });
+
+        services.AddSingleton<IHostedService>(sp => new SessionWiringCheck(
+            sp.GetRequiredService<IServiceProviderIsService>(),
+            sp.GetRequiredService<IOptions<ThargaBlazorOptions>>(),
+            sp.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()));
     }
 
     /// <summary>
@@ -482,8 +535,9 @@ public static class ThargaBlazorRegistration
     internal const string IconHttpClientName = "tharga-icon-download";
 
     /// <summary>
-    /// Maps the middleware and endpoints the Blazor layer needs — currently the icon-serving endpoint at
-    /// <see cref="IconRoute.Base"/>/{reference}. Call this once on the built application when using the
+    /// Maps the middleware and endpoints the Blazor layer needs — the icon-serving endpoint at
+    /// <see cref="IconRoute.Base"/>/{reference}, and the endpoint the page reports session activity to
+    /// (<c>POST /_tharga/session/activity</c>). Call this once on the built application when using the
     /// granular setup path; <c>UseThargaTeam</c> calls it for you.
     /// </summary>
     /// <remarks>
@@ -510,6 +564,10 @@ public static class ThargaBlazorRegistration
             context.Response.Headers.CacheControl = "private, max-age=31536000, immutable";
             return Results.File(content.Data, content.ContentType);
         });
+
+        // Where the page reports that someone is using it, so an idle timeout counts what they do inside a circuit (Tharga/Team#471).
+        // Mapped for every host; with no session policy it answers and does nothing.
+        SessionActivityEndpoint.Map(app);
     }
 
     private static void DecorateWithAuthorization(IServiceCollection services, TeamLifecycleOptions lifecycle)

@@ -141,7 +141,7 @@ else
                                 LoadData="@OnLoadData"
                                 AllowSorting="true" AllowPaging="true" AllowFiltering="true"
                                 FilterMode="FilterMode.Simple" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive"
-                                PageSize="@_pageSize" PageSizeOptions="@PageSizeOptionsValues"
+                                PageSize="@_pageSize" PageSizeOptions="@PageSizeOptionsValues" PageSizeText="@_text[AuditLogViewText.PageSize]"
                                 ShowPagingSummary="true" PagingSummaryFormat="@_text[AuditLogViewText.PagingSummary]"
                                 Style="max-height:600px">
                     <Columns>

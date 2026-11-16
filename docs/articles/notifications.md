@@ -173,6 +173,10 @@ default, and whether a new user is news is the host's call, so add the one you w
 new() { Event = "auth:user-created", Channel = "#signups", Template = "New user *{user.email}* signed in for the first time." }
 ```
 
+With [session limits](implementation-guide.md#session-limits) on, three more are routable the same way, none by
+default: `auth:signout`, `auth:session-ended` (with `{session.reason}`) and `auth:session-superseded` (with
+`{user.key}` and `{team.display}`).
+
 ## Two things to know
 
 **The audit filter sits upstream of routing.** An `AuditOptions.EventFilter` or `ExcludedActions` that

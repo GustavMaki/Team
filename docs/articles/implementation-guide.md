@@ -271,6 +271,10 @@ that cannot register the post-logout redirect URI yet and would rather make that
 > always survived. If you are upgrading, register the post-logout redirect URI above **before** you deploy —
 > that is the one action this release asks of you.
 
+**With [session limits](#session-limits) on, signing out also ends the server-side session** (audited as `auth` /
+`signout`), first, while the cookie still says whose session it is. A session store that cannot be reached is logged
+and the sign-out goes on: it never leaves someone who asked to sign out signed in.
+
 #### Choosing an account
 
 **`PromptForAccount` is off by default**, because it is not what fixes sign-out. With federated sign-out on,
@@ -1348,6 +1352,83 @@ builder.AddThargaTeam(o =>
 **Cost.** The guard is asked wherever claims are built: once per authenticated request that carries the team cookie, and once per circuit per revalidation
 interval. Within the cache window a repeat is a dictionary lookup, so the cost is the guard's own, once per user, session and team per window. With no guard
 registered the only added work is a null check. The sample's `SampleTeamEntryGuard` shows each answer: rename a team to contain *Locked* or *BankID*.
+
+#### Session limits
+
+A sign-in otherwise lasts as long as its cookie: nothing on the server knows it exists, so nothing can end it early. Register an `ISessionPolicy`
+and every sign-in becomes a **server-side session** the library checks on each request: you give the numbers per team, the library does the
+arithmetic. With none registered, nothing changes.
+
+```csharp
+public sealed class StrictTeams(ITeamPolicies policies) : ISessionPolicy
+{
+    public async Task<SessionLimits> GetLimitsAsync(UserSession session, string teamKey, CancellationToken cancellationToken = default)
+    {
+        if (!await policies.IsStrictAsync(teamKey, cancellationToken)) return SessionLimits.None;
+
+        return new SessionLimits
+        {
+            MaxAge = TimeSpan.FromHours(8),          // from the sign-in, however active
+            IdleTimeout = TimeSpan.FromMinutes(15),  // from the last activity
+            SingleSession = true                     // one session per person in this team; the newest sign-in wins
+        };
+    }
+}
+
+builder.Services.AddScoped<ISessionPolicy, StrictTeams>();
+```
+
+- **The session lives on the server**, in `IUserSessionStore` (`AddThargaTeamRepository` registers a MongoDB one, collection `UserSession`; ended sessions
+  expire after 30 days). The browser holds only its id, in a claim the library stamps at sign-in (`TeamClaimTypes.SessionId`, issuer `Tharga.Team`) inside
+  the data-protected cookie. A claim of that type sent by the identity provider is discarded, never believed, and a claim naming someone else's session is
+  refused.
+- **Checked on every request** in the cookie scheme's `OnValidatePrincipal`, before your own handler, and in every live circuit beside the disabled-user
+  check, on the [revalidation interval](#team-claim-revalidation). The team is the one the selected-team cookie names; limits only restrict, and a team switch
+  reloads the page, so the next request is checked against the new team.
+- **An ended session is signed out once and audited once**, by the request that ended it, however many requests follow. When that request needs a sign-in,
+  the browser is sent to `Sessions.EndedPath` (or the start page) with the reason as a code, `?reason=idle`, `maxage`, `newersignin`, `ended` or `signedout`,
+  rather than straight to the provider. Make that page `[AllowAnonymous]` so the person can read it before signing in again.
+- **Idle time counts what the person does**, also inside a circuit, which sends no request: `LoginDisplay` loads a small script that reports use of the
+  visible tab (pointer, keys, wheel) to `POST /_tharga/session/activity` at most once per `Sessions.ActivityInterval`. `UseThargaTeamBlazor` maps it. The
+  store throttles per session, so several tabs and instances cost one write a minute. A session is never ended as idle on a remembered stamp: the store is
+  read again first.
+- **One session per team, newest sign-in wins.** When `SingleSession` is set and a session enters the team, the person's older sessions there are ended
+  (`newersignin`); a session switching into a team where a newer one already is ends itself instead. Each end is conditional in the store, so two instances
+  racing converge on the newest sign-in.
+- **Cookies from before an upgrade are adopted, never signed out**: the first request with no session claim gets a session (origin `Adopted`) and a renewed
+  cookie. **Its age counts from the original sign-in** (`auth_time`, else when the cookie was issued), so turning a max age on can end older cookies at
+  once. That is what a max age means; plan the release accordingly, or turn adoption off.
+- **A host that signs in by its own means** calls `IUserSessionService.StartAsync(principal)` and signs in the principal it returns; name your cookie scheme
+  in `Sessions.CookieScheme` if it is not `Cookies`. `IUserSessionService` also ends the current session or every other session of the caller.
+- **Failures allow by default.** A policy or store that throws is logged and the request goes through (`Sessions.OnError = Allow`): a database blip must not
+  sign everybody out. `Deny` refuses the request instead, without ending the session. A live circuit is never ended for a failure.
+- **Startup fails, naming the problem**, when a policy is registered with no `IUserSessionStore`, or when the cookie scheme sets `EventsType`, which would
+  silently replace the events the check is chained into. Both only when sessions are on.
+- **API keys and MCP** authenticate through other schemes and are never touched.
+
+```csharp
+builder.AddThargaTeam(o =>
+{
+    o.Blazor.Sessions.EndedPath = "/session-ended";           // default null: the start page
+    // o.Blazor.Sessions.OnError = SessionErrorBehavior.Deny;  // default Allow
+    // o.Blazor.Sessions.Enabled = false;                      // switch a registered policy off without removing it
+});
+```
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `Sessions.Enabled` | `true` | Whether a registered policy is applied. With no policy registered nothing here runs. |
+| `Sessions.CacheDuration` | 30 seconds | How long a session and its limits are remembered per instance. `Zero` reads every time; longer means a session ended elsewhere is noticed later. |
+| `Sessions.ActivityInterval` | 1 minute | How often activity is written per session, at most. An idle timeout shorter than this cannot be told from activity. |
+| `Sessions.EndedPath` | `null` | Where a browser whose session ended is sent, with `?reason=`. A path on this site only; otherwise the start page. |
+| `Sessions.AdoptExistingCookies` | `true` | Give a cookie from before sessions a session on its next request. `false` lets such a cookie through with no session and no limits until it expires. |
+| `Sessions.OnError` | `Allow` | What a failing policy or store does to a request. `Deny` refuses it without ending the session. |
+| `Sessions.CookieScheme` | `Cookies` | The cookie scheme the check is chained into. |
+
+**Audited** (feature `auth`): `signout` when a person signs out, `session-ended` with the reason in `session.reason`, and `session-superseded` for an
+older session a newer sign-in ended, with its team. None names the session id. **Cost**: one store read per session per cache window, one activity write
+per session per interval, and the policy once per session and team per window. With no policy registered the only added work is one resolve per request.
+The sample's `SampleSessionPolicy` gives a team named *Strict* a two-minute idle timeout and one session per person.
 
 ### Verification
 

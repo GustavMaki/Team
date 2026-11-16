@@ -18,6 +18,11 @@ all night. Code of your own that reads the user on a schedule should do the same
 A user service of your own that implements only `GetCurrentUserAsync(principal)` keeps working, and decides for itself
 what it records.
 
+**Last seen is not session activity.** With [session limits](implementation-guide.md#session-limits) on, each sign-in
+also has a server-side session with its own activity stamp, per session rather than per user, written at most once a
+minute and including what the person does inside a circuit, which the page reports. That stamp is what an idle timeout
+counts from; `LastSeen` is the coarse, per-user figure the user list shows, and neither moves the other.
+
 Tracking is **opt-in by entity shape**: declare the property on your user entity and the toolkit starts
 writing it — leave it off and nothing is written.
 
@@ -878,6 +883,12 @@ A name or email refreshed from a trusted sign-in (see
 audited under feature `auth` as `user-profile-refreshed`, with the user as the actor. Its metadata names what
 changed (`changed`: `name`, `email` or both) and the resulting `user.email`; the name itself is not copied into the
 log.
+
+With [session limits](implementation-guide.md#session-limits) on, the session's events are audited under feature
+`auth` too: `signout` when someone signs out, `session-ended` when a limit ended a session (the reason in
+`session.reason`: `MaxAge`, `Idle`, `NewerSignIn`, `Ended`), and `session-superseded`, with the team, for an older
+session a newer sign-in of the same person ended. Each is written once, by the request that ended the session. None
+names the session id, which is a key.
 
 ## Custom directory providers
 

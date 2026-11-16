@@ -1,3 +1,5 @@
+using Tharga.Team.Blazor.Framework;
+
 namespace Tharga.Team.Blazor.Features.Audit;
 
 /// <summary>
@@ -10,8 +12,8 @@ namespace Tharga.Team.Blazor.Features.Audit;
 /// </remarks>
 internal static class AuditRetentionText
 {
-    public static string Describe(int? retentionDays)
+    public static string Describe(int? retentionDays, TextSet text)
         => retentionDays is > 0
-            ? $"Entries are kept for {retentionDays} days, then deleted automatically."
-            : "Entries are kept indefinitely.";
+            ? text.Format(AuditLogViewText.RetentionDays, retentionDays)
+            : text[AuditLogViewText.RetentionIndefinite];
 }

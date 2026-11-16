@@ -49,6 +49,15 @@ public static class AuditLogViewText
     /// <summary>Radzen's paging summary. The three placeholders are first row, last row, total.</summary>
     public static readonly TextKey PagingSummary = new("team.auditLogView.pagingSummary", "Showing {0}-{1} of {2}");
 
+    /// <summary>The label beside the grid's page-size picker.</summary>
+    public static readonly TextKey PageSize = new("team.auditLogView.pageSize", "items per page");
+
+    /// <summary>How long entries are kept. Placeholder: the number of days.</summary>
+    public static readonly TextKey RetentionDays = new("team.auditLogView.retentionDays", "Entries are kept for {0} days, then deleted automatically.");
+
+    /// <summary>Said when entries are never removed.</summary>
+    public static readonly TextKey RetentionIndefinite = new("team.auditLogView.retentionIndefinite", "Entries are kept indefinitely.");
+
     public static readonly TextKey ColumnTime = new("team.auditLogView.columnTime", "Time");
     public static readonly TextKey ColumnCaller = new("team.auditLogView.columnCaller", "Caller");
     public static readonly TextKey ColumnScope = new("team.auditLogView.columnScope", "Scope");
@@ -117,7 +126,7 @@ public static class AuditLogViewText
         TabLog, TabUsage, TabPerformance,
         Period, PeriodToday, PeriodSevenDays, PeriodThirtyDays, PeriodNinetyDays, FilterAll,
         Team, Source, ScopeFeature, ScopeAction, Event, Result, Success, Failure,
-        Export, ExportCsv, ExportJson, PagingSummary,
+        Export, ExportCsv, ExportJson, PagingSummary, PageSize, RetentionDays, RetentionIndefinite,
         ColumnTime, ColumnCaller, ColumnScope, ColumnOperation, OperationNotScopeChecked,
         ShowHiddenEntries, HiddenScopes,
         ColumnMethod, ColumnDuration, ColumnFeature, ColumnAction, ColumnDurationMs,

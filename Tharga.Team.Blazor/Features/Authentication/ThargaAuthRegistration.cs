@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Identity.Web;
 
 using Microsoft.Extensions.Logging;
+using Tharga.Team.Blazor.Framework;
+using Tharga.Team.Service;
 using Tharga.Team.Service.Audit;
 namespace Tharga.Team.Blazor.Features.Authentication;
 
@@ -17,7 +19,7 @@ namespace Tharga.Team.Blazor.Features.Authentication;
 public static class ThargaAuthRegistration
 {
     private const string AzureAdSectionName = "AzureAd";
-    private const string HomePath = "/";
+    internal const string HomePath = "/";
 
     /// <summary>
     /// The key the OpenID Connect handler reads a prompt from, and the value that asks for an account
@@ -86,6 +88,22 @@ public static class ThargaAuthRegistration
                     }
 
                     if (inner != null) await inner(context);
+
+                    await StartSessionAsync(context);
+                };
+
+                // A request refused because its session ended is sent to where it is told why, rather than straight to the provider (Tharga/Team#471).
+                var innerRedirect = oidc.Events.OnRedirectToIdentityProvider;
+                oidc.Events.OnRedirectToIdentityProvider = async context =>
+                {
+                    if (SessionCookieEvents.EndedLocation(context.HttpContext) is { } location)
+                    {
+                        context.Response.Redirect(location);
+                        context.HandleResponse();
+                        return;
+                    }
+
+                    if (innerRedirect != null) await innerRedirect(context);
                 };
             });
 
@@ -116,6 +134,9 @@ public static class ThargaAuthRegistration
 
         app.MapGet(options.LogoutPath, async (HttpContext context) =>
         {
+            // First, while the cookie still says whose session it is.
+            await EndSessionAsync(context);
+
             if (!options.FederatedSignOut)
             {
                 await context.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme);
@@ -144,7 +165,65 @@ public static class ThargaAuthRegistration
     /// </remarks>
     internal static string ReturnPath(string returnUrl) => IsLocalPath(returnUrl) ? returnUrl : HomePath;
 
-    private static bool IsLocalPath(string value)
+    /// <summary>
+    /// Starts the server-side session of an interactive sign-in, when sessions are on (Tharga/Team#471): any session claim the identity provider sent is
+    /// stripped, and the library stamps its own, so the claim's provenance is the library and it travels only in the data-protected cookie.
+    /// </summary>
+    /// <remarks>
+    /// <b>A start that fails never costs the sign-in</b>, for the same reason the audit above cannot: the principal is left without a session claim, and
+    /// the next request adopts it. With no policy registered nothing here runs and the principal is untouched. The library's own service starts the
+    /// session as <see cref="SessionOrigin.SignIn"/>; a host's replacement is asked through the interface.
+    /// </remarks>
+    private static async Task StartSessionAsync(TokenValidatedContext context)
+    {
+        if (context.Result != null || context.Principal == null) return;
+
+        var services = context.HttpContext.RequestServices;
+        if (services.GetService<SessionEvaluator>()?.Active != true) return;
+
+        context.Principal = UserSessionService.WithoutSessionClaim(context.Principal);
+
+        try
+        {
+            var sessions = services.GetService<IUserSessionService>();
+            if (sessions == null) return;
+
+            context.Principal = sessions is UserSessionService own
+                ? await own.StartAsync(context.Principal, SessionOrigin.SignIn, context.HttpContext.RequestAborted)
+                : await sessions.StartAsync(context.Principal);
+        }
+        catch (Exception ex)
+        {
+            services.GetService<ILoggerFactory>()?
+                .CreateLogger(typeof(ThargaAuthRegistration))
+                .LogWarning(ex, "Failed to start a server-side session at sign-in; the next request adopts the cookie.");
+        }
+    }
+
+    /// <summary>
+    /// Ends the caller's server-side session as signed out, when sessions are on (Tharga/Team#471); audited by the session service when this call ended it.
+    /// A session database that is down must not leave someone who asked to sign out signed in, so a failure is logged and the sign-out goes on.
+    /// </summary>
+    private static async Task EndSessionAsync(HttpContext context)
+    {
+        var services = context.RequestServices;
+
+        try
+        {
+            if (services?.GetService<SessionEvaluator>()?.Active != true) return;
+
+            var sessions = services.GetService<IUserSessionService>();
+            if (sessions != null) await sessions.EndCurrentAsync();
+        }
+        catch (Exception ex)
+        {
+            services?.GetService<ILoggerFactory>()?
+                .CreateLogger(typeof(ThargaAuthRegistration))
+                .LogWarning(ex, "Failed to end the server-side session at sign-out; the cookie is signed out regardless.");
+        }
+    }
+
+    internal static bool IsLocalPath(string value)
     {
         if (string.IsNullOrEmpty(value) || value[0] != '/') return false;
         if (value.Length > 1 && (value[1] == '/' || value[1] == '\\')) return false;

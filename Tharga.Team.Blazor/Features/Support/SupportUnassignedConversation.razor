@@ -9,7 +9,7 @@
 <RadzenStack Orientation="Orientation.Vertical" Gap="0.75rem" data-conversation="@Case.Id">
 
     @* A visitor who wrote through the host's public form: what they typed, unverified, as a table. *@
-    <SupportContactTable Contact="Case.ExternalContact" CaseId="@Case.Id" />
+    <SupportContactTable Contact="Case.ExternalContact" CaseId="@Case.Id" TimeTemplate="TimeTemplate" />
 
     @* Whatever the host adds to an opened case, below the contact: linking the message to its own records, for one. *@
     @Extras?.Invoke(Case)

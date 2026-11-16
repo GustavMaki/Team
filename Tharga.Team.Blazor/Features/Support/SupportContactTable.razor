@@ -18,7 +18,7 @@
                     <tr data-contact-row="@row.Key">
                         <th scope="row" style="text-align: left; font-weight: normal; color: var(--rz-text-secondary-color); padding: 0.125rem 1rem 0.125rem 0;">@row.Label</th>
                         <td style="padding: 0.125rem 0;">
-                            <span data-contact-value="@row.Key">@row.Value</span>
+                            <span data-contact-value="@row.Key">@(row.Content ?? (RenderFragment)(builder => builder.AddContent(0, row.Value)))</span>
                             @if (row.Copyable)
                             {
                                 <RadzenButton Icon="content_copy" Size="ButtonSize.ExtraSmall" Variant="Variant.Text" ButtonStyle="ButtonStyle.Base"
@@ -40,9 +40,12 @@
     /// <summary>The case the contact belongs to; only to tell the tables of several open cases apart.</summary>
     [Parameter] public string CaseId { get; set; }
 
+    /// <summary>How the moment consent was given is written; unset writes it in the current culture's short date and time.</summary>
+    [Parameter] public RenderFragment<DateTime> TimeTemplate { get; set; }
+
     private TextSet _text = TextSet.Empty;
 
-    private sealed record Row(string Key, string Label, string Value, bool Copyable = false);
+    private sealed record Row(string Key, string Label, string Value, bool Copyable = false, RenderFragment Content = null);
 
     protected override async Task OnInitializedAsync() => _text = await TextProvider.ResolveAsync(SupportContactText.All);
 
@@ -60,9 +63,10 @@
         }
 
         // Always shown: that nobody recorded consent is something staff should see, not infer from a missing row.
-        yield return new Row("consent", _text[SupportContactText.Consent], Contact.ConsentGivenAt is { } consent
-            ? consent.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture)
-            : _text[SupportContactText.NoConsent]);
+        if (Contact.ConsentGivenAt is { } consent)
+            yield return new Row("consent", _text[SupportContactText.Consent], consent.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture), Content: TimeTemplate?.Invoke(consent));
+        else
+            yield return new Row("consent", _text[SupportContactText.Consent], _text[SupportContactText.NoConsent]);
     }
 
     private static bool Present(string value) => !string.IsNullOrWhiteSpace(value);
