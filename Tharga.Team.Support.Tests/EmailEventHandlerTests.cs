@@ -58,6 +58,79 @@ public class EmailEventHandlerTests
             x.CaseId == CaseId && x.FromChannel && x.Change == SupportCaseChange.Replied));
     }
 
+    /// <summary>
+    /// Tharga/Team#498: a customer who answers after the case closed -- by hand, by the automatic close or by a rule
+    /// earlier in the thread -- has not been answered, so the case opens again as it does for Slack and the site.
+    /// </summary>
+    [Fact]
+    public async Task AReplyToAClosedCase_ReopensItWithASystemEntry()
+    {
+        var (handler, store, _, _) = Build();
+        store.GetCaseByBindingAsync(SupportChannelType.Email, ThreadId, Arg.Any<CancellationToken>()).Returns(Case(SupportCaseStatus.Closed));
+
+        var outcome = await handler.HandleAsync(Mail());
+
+        Assert.True(outcome.WasApplied);
+        await store.Received(1).ReopenCaseAsync(TeamKey, CaseId,
+            Arg.Is<SupportMessage>(x => x.Kind == SupportMessageKind.System && x.Body == "Case reopened by a reply by e-mail."),
+            Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// <b>The order matters.</b> Reopening marks the case as last written by support, so appending the reply first would
+    /// leave the reopened case out of the awaiting-support count.
+    /// </summary>
+    [Fact]
+    public async Task TheCaseIsReopened_BeforeTheReplyIsAppended()
+    {
+        var (handler, store, _, _) = Build();
+        store.GetCaseByBindingAsync(SupportChannelType.Email, ThreadId, Arg.Any<CancellationToken>()).Returns(Case(SupportCaseStatus.Closed));
+
+        await handler.HandleAsync(Mail());
+
+        Received.InOrder(() =>
+        {
+            store.ReopenCaseAsync(TeamKey, CaseId, Arg.Any<SupportMessage>(), Arg.Any<CancellationToken>());
+            store.AppendMessageAsync(TeamKey, CaseId, Arg.Any<SupportMessage>(), Arg.Any<CancellationToken>());
+        });
+    }
+
+    [Fact]
+    public async Task TheHostIsToldThatTheCaseWasReopened()
+    {
+        var (handler, store, notifier, _) = Build();
+        store.GetCaseByBindingAsync(SupportChannelType.Email, ThreadId, Arg.Any<CancellationToken>()).Returns(Case(SupportCaseStatus.Closed));
+
+        await handler.HandleAsync(Mail());
+
+        notifier.Received(1).Notify(Arg.Is<SupportCaseUpdatedEventArgs>(x => x.CaseId == CaseId && x.FromChannel && x.Change == SupportCaseChange.Reopened));
+        notifier.Received(1).Notify(Arg.Is<SupportCaseUpdatedEventArgs>(x => x.CaseId == CaseId && x.Change == SupportCaseChange.Replied));
+    }
+
+    [Fact]
+    public async Task AReplyToAnOpenCase_IsNotReopened()
+    {
+        var (handler, store, notifier, _) = Build();
+
+        await handler.HandleAsync(Mail());
+
+        await store.DidNotReceive().ReopenCaseAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<SupportMessage>(), Arg.Any<CancellationToken>());
+        notifier.DidNotReceive().Notify(Arg.Is<SupportCaseUpdatedEventArgs>(x => x.Change == SupportCaseChange.Reopened));
+    }
+
+    /// <summary>A reply nobody accepts must not be able to reopen a case: neither a stranger who knows the thread id nor an empty mail.</summary>
+    [Fact]
+    public async Task AMailThatIsNotAccepted_DoesNotReopenAClosedCase()
+    {
+        var (handler, store, _, _) = Build();
+        store.GetCaseByBindingAsync(SupportChannelType.Email, ThreadId, Arg.Any<CancellationToken>()).Returns(Case(SupportCaseStatus.Closed));
+
+        await handler.HandleAsync(Mail() with { From = "stranger@example.com" });
+        await handler.HandleAsync(Mail() with { MessageId = "empty-1@example.com", Body = "" });
+
+        await store.DidNotReceive().ReopenCaseAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<SupportMessage>(), Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task AThreadNamedOnlyInReferences_StillMatches()
     {
@@ -375,14 +448,14 @@ public class EmailEventHandlerTests
         References = []
     };
 
-    private static SupportCase Case() => new()
+    private static SupportCase Case(SupportCaseStatus status = SupportCaseStatus.Open) => new()
     {
         Id = CaseId,
         TeamKey = TeamKey,
         AuthorIdentity = "sub-1",
         AuthorName = "A User",
         Subject = "Export is empty",
-        Status = SupportCaseStatus.Open,
+        Status = status,
         CreatedAt = new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Utc),
         MessageCount = 1,
         Bindings = [new SupportChannelBinding { ChannelType = SupportChannelType.Email, ExternalId = ThreadId, Address = Correspondent }]

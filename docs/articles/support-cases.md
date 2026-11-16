@@ -251,6 +251,12 @@ is the whole reason it exists rather than telling somebody to raise a second cas
 **Reopening an already-open case does nothing and is not an error.** Two people looking at the same closed
 case both press the button; the second sees an open case rather than a complaint.
 
+**A reply reopens a closed case on its own**, from every channel: an answer on the site, in the Slack thread, or
+**by e-mail**. A case closed by hand, by `AutoCloseAfter` or by a sender rule earlier in the thread is open again, with a
+system entry saying which channel reopened it, and a `Reopened` notification followed by `Replied`. The reply is appended after the
+reopen, so it counts as awaiting support. A mail that is not accepted as a reply (from an address the case does not
+correspond with, or empty) reopens nothing.
+
 **Writing to a closed case reopens it.** Whatever is written — on the site, by mail, or as a reply in its
 Slack thread — continues the conversation that explains it rather than being refused, so the case opens
 again first and the entry lands in it.
