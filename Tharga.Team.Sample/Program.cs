@@ -75,6 +75,10 @@ builder.AddThargaTeam(o =>
     // 30 minutes; set o.Blazor.ClaimRevalidation.Enabled = false to turn revalidation off entirely.
     o.Blazor.ClaimRevalidation.Interval = TimeSpan.FromSeconds(20);
 
+    // Where a browser whose session ended is sent, with ?reason=; see SampleSessionPolicy. The same 20-second interval is how soon an idle tab's
+    // circuit notices.
+    o.Blazor.Sessions.EndedPath = "/session-ended";
+
     // Cross-team visibility: grant the consent roles the teams:read system scope, so a Developer sees
     // every team (not just their own) with a badge showing what each has consented to. Discovery only —
     // access inside a team still depends on that team's consent.
@@ -232,6 +236,10 @@ builder.Services.AddScoped<ITeamScopeVisibilityProvider, Tharga.Team.Sample.Fram
 
 // The host's rule for who may work in a team: a team named Locked refuses entry, one named BankID sends the caller to /sample-step-up first.
 builder.Services.AddScoped<ITeamEntryGuard, Tharga.Team.Sample.Framework.SampleTeamEntryGuard>();
+
+// Server-side sessions: a team named Strict ends a session after two minutes without use and allows one session per person, the newest sign-in winning.
+// Registering a policy is what turns sessions on; every other team has no limits. An ended session lands on /session-ended, which says why.
+builder.Services.AddScoped<ISessionPolicy, Tharga.Team.Sample.Framework.SampleSessionPolicy>();
 
 // Demo state behind the member-grid extension points on /team. Singleton so one browser tab's change is
 // visible in another; in memory because persisting a host's own member field is the host's job.

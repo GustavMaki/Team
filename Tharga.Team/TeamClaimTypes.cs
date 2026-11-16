@@ -14,6 +14,9 @@ public static class TeamClaimTypes
     /// </remarks>
     public const string TeamKey = "TeamKey";
 
+    /// <summary>Claim type carrying the server-side session id (Tharga/Team#471); deliberately not the identity provider's <c>sid</c>.</summary>
+    public const string SessionId = "tharga_session_id";
+
     /// <summary>
     /// Claim type marking which team the caller currently has <b>selected</b>, independent of whether that
     /// selection grants any access.

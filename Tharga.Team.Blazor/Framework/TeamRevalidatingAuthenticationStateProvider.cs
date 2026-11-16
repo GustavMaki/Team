@@ -82,6 +82,9 @@ internal sealed class TeamRevalidatingAuthenticationStateProvider : Revalidating
         // refresh: there is no point bringing team access up to date for someone who is being signed out.
         if (await IsDisabledAsync(scope.ServiceProvider, authenticationState.User)) return false;
 
+        // So does a server-side session that has ended, here or on another instance: a circuit makes no request for the cookie check to refuse.
+        if (await IsSessionEndedAsync(scope.ServiceProvider, authenticationState.User)) return false;
+
         var revalidator = scope.ServiceProvider.GetRequiredService<TeamClaimRevalidator>();
 
         var refreshed = await revalidator.TryRefreshAsync(authenticationState.User);
@@ -124,6 +127,35 @@ internal sealed class TeamRevalidatingAuthenticationStateProvider : Revalidating
 
             var user = await userService.GetCurrentUserAsync(principal, recordActivity: false);
             return user?.DisabledAt != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether the caller's server-side session has ended, so the circuit is ended with it (Tharga/Team#471): ended elsewhere, or over the host's limits for
+    /// the team the circuit is in, in which case it is ended now and audited once.
+    /// </summary>
+    /// <remarks>
+    /// <b>Fail-open, like <see cref="IsDisabledAsync"/></b>: a store that cannot be reached must not end every open tab at once, whatever
+    /// <see cref="SessionOptions.OnError"/> says for requests. It never adopts a cookie with no session and never records activity, because this loop runs
+    /// for an idle tab too; the page reports activity itself. Nothing is read when no policy is registered.
+    /// <para>
+    /// It runs on the revalidation interval (<see cref="ClaimRevalidationOptions.Interval"/>), so a live circuit learns of an ended session at most one
+    /// interval late; the next request is refused at once regardless.
+    /// </para>
+    /// </remarks>
+    internal static async Task<bool> IsSessionEndedAsync(IServiceProvider services, System.Security.Claims.ClaimsPrincipal principal)
+    {
+        try
+        {
+            var evaluator = services.GetService<SessionEvaluator>();
+            if (evaluator?.Active != true) return false;
+
+            var check = await evaluator.EvaluateCircuitAsync(principal, principal?.FindFirst(TeamClaimTypes.SelectedTeamKey)?.Value);
+            return check.Outcome == SessionCheckOutcome.Ended;
         }
         catch
         {
