@@ -120,6 +120,23 @@ internal sealed class EmailEventHandler(
         var body = Body(text, files.Notes);
         var html = Html(mail.BodyHtml, textCut, files.Notes);
 
+        // A reply to a closed case means it is not over -- whether it was closed by hand, by the automatic close
+        // or by a rule earlier in the thread -- so it opens again, as a reply in Slack or on the site does
+        // (Tharga/Team#498). Only here, after the sender and the body have been accepted: a stranger or an empty
+        // mail must not be able to reopen anything. And before the append, not after: reopening marks the case as
+        // last written by support, so the order the other way round would leave the reply out of the awaiting count.
+        var reopened = supportCase.Status == SupportCaseStatus.Closed;
+        if (reopened)
+        {
+            await store.ReopenCaseAsync(supportCase.TeamKey, supportCase.Id, new SupportMessage
+            {
+                Sequence = 0,
+                Kind = SupportMessageKind.System,
+                Body = "Case reopened by a reply by e-mail.",
+                SentAt = timeProvider.GetUtcNow().UtcDateTime
+            }, cancellationToken);
+        }
+
         await store.AppendMessageAsync(supportCase.TeamKey, supportCase.Id, new SupportMessage
         {
             Sequence = 0,
@@ -150,6 +167,17 @@ internal sealed class EmailEventHandler(
             Mailbox = binding.Mailbox,
             MailboxAddress = binding.MailboxAddress
         }, cancellationToken);
+
+        if (reopened)
+        {
+            notifier?.Notify(new SupportCaseUpdatedEventArgs
+            {
+                TeamKey = supportCase.TeamKey,
+                CaseId = supportCase.Id,
+                Change = SupportCaseChange.Reopened,
+                FromChannel = true
+            });
+        }
 
         notifier?.Notify(new SupportCaseUpdatedEventArgs
         {
