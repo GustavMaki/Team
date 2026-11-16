@@ -184,6 +184,6 @@
             Claims = principal.Claims.Select(c => new { c.Type, c.Value }).ToArray()
         };
         var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-        await JS.InvokeVoidAsync("navigator.clipboard.writeText", json);
+        await JS.TryCopyToClipboardAsync(json, "navigator.clipboard.writeText");
     }
 }

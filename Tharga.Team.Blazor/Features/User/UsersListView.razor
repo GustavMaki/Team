@@ -748,7 +748,7 @@ else
 
     private async Task CopyAsync(string value)
     {
-        await Js.InvokeVoidAsync("clipboard.copyText", value);
+        await Js.TryCopyToClipboardAsync(value);
     }
 
     /// <summary>

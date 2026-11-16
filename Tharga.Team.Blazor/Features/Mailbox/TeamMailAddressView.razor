@@ -154,7 +154,8 @@ else
 
     private async Task CopyAsync(string address)
     {
-        await JsRuntime.InvokeVoidAsync("navigator.clipboard.writeText", address);
+        if (!await JsRuntime.TryCopyToClipboardAsync(address, "navigator.clipboard.writeText")) return;
+
         NotificationService.Notify(NotificationSeverity.Info, _text[TeamMailAddressViewText.Copied]);
     }
 

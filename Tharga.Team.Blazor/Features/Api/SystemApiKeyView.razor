@@ -328,7 +328,8 @@
     private async Task CopyToClipboard(SystemApiKeyModel context)
     {
         var keyToCopy = context.VisibleKey != _apiKeyMask ? context.VisibleKey : context.ApiKey;
-        await Js.InvokeVoidAsync("clipboard.copyText", keyToCopy);
+        if (!await Js.TryCopyToClipboardAsync(keyToCopy)) return;
+
         NotificationService.Notify(new NotificationMessage
         {
             Summary = _text.Format(ApiKeyViewText.Copied, context.Name)
