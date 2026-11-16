@@ -508,6 +508,13 @@ that none was recorded. Rows with nothing in them are left out. The labels go th
   <SupportUnassignedView CaseExtras="@(c => @<ProspectLink CaseId="@c.Id" />)" />
   ```
 
+- **Assignment can be left to the host.** `SupportUnassignedView` (and `SupportUnassignedConversation`) take `ShowAssignment`, which is `true` by
+  default. Set it to `false` and neither the suggested-team buttons nor the team dropdown render, so a host that links a case to its own
+  records in `CaseExtras` can offer one control for both. Nothing else in the conversation changes, and the case keeps its `SuggestedTeams` and
+  `SuggestionReason` for the host's control to show. The host gives the case its team with `AssignCaseAsync`, which now stores the team's
+  **name** in `TeamName` along with `TeamKey`, as a case placed on receipt already did. The name is read through the cross-team read
+  (`ITeamOversightService`) first, since the staff who triage the queue are rarely members of the team, and falls back to the caller's own teams; a
+  name that cannot be read leaves `TeamName` empty and the case is assigned all the same.
 - **Open one case on load.** `CaseId` on either board opens that case, so a host can link straight to it, for instance from a query
   value: `<SupportUnassignedView CaseId="@Case" />` with `[SupplyParameterFromQuery(Name = "case")]`. An id that names nothing the
   reader can list opens nothing and does not throw; a filter does not hide the case asked for.

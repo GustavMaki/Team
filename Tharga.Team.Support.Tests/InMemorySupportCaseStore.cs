@@ -130,6 +130,9 @@ internal sealed class InMemorySupportCaseStore : ISupportCaseStore
     /// "two agents triage the same queue" test is about the store's condition rather than the fake's.
     /// </summary>
     public Task<bool> TryAssignCaseAsync(string caseId, string teamKey, SupportMessage assignmentMessage, CancellationToken cancellationToken = default)
+        => TryAssignCaseAsync(caseId, teamKey, null, assignmentMessage, cancellationToken);
+
+    public Task<bool> TryAssignCaseAsync(string caseId, string teamKey, string teamName, SupportMessage assignmentMessage, CancellationToken cancellationToken = default)
     {
         // By index rather than through Replace, which locates a case by (team, id) -- and the team is the
         // one thing this operation changes.
@@ -141,7 +144,7 @@ internal sealed class InMemorySupportCaseStore : ISupportCaseStore
 
         messages.Add(assignmentMessage with { Sequence = messages.Count + 1 });
 
-        _cases[index] = (supportCase with { TeamKey = teamKey, MessageCount = messages.Count }, messages);
+        _cases[index] = (supportCase with { TeamKey = teamKey, TeamName = string.IsNullOrWhiteSpace(teamName) ? supportCase.TeamName : teamName, MessageCount = messages.Count }, messages);
 
         return Task.FromResult(true);
     }

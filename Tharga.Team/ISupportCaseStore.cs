@@ -260,6 +260,18 @@ public interface ISupportCaseStore
         => Task.FromResult(false);
 
     /// <summary>
+    /// As <see cref="TryAssignCaseAsync(string, string, SupportMessage, CancellationToken)"/>, and records the team's
+    /// <paramref name="teamName"/> on the case along with its key, so a case assigned by hand reads like one placed on receipt
+    /// (Tharga/Team#500).
+    /// </summary>
+    /// <remarks>
+    /// <b>Defaults to the overload without a name</b>, so a store written before this keeps assigning, and its cases simply
+    /// carry no name. A <c>null</c> or blank name leaves <c>TeamName</c> as it was.
+    /// </remarks>
+    Task<bool> TryAssignCaseAsync(string caseId, string teamKey, string teamName, SupportMessage assignmentMessage, CancellationToken cancellationToken = default)
+        => TryAssignCaseAsync(caseId, teamKey, assignmentMessage, cancellationToken);
+
+    /// <summary>
     /// Closes a case for inactivity, but only if it is still open. Returns whether this call closed it.
     /// </summary>
     /// <remarks>
