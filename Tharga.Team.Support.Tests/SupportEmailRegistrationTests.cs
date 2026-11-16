@@ -38,6 +38,7 @@ public class SupportEmailRegistrationTests
         o.Email.MaxAttachmentBytes = 10;
         o.Email.MaxAttachmentTotalBytes = 20;
         o.Email.MaxAttachmentCount = 3;
+        o.Email.MaxOriginalBytes = 30;
         o.Email.FirstReadSince = new DateTime(2026, 10, 17);
     }
 

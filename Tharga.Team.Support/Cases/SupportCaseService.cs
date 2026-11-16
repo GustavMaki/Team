@@ -320,6 +320,24 @@ internal sealed class SupportCaseService(
         return opened == null ? null : new SupportAttachmentContent { Attachment = attachment, Content = opened.Content };
     }
 
+    /// <remarks>The entry is read by its sequence and the original found by the id it names, so no other id can be asked for; the store compares the case again.</remarks>
+    public async Task<byte[]> GetMessageOriginalAsync(string teamKey, string caseId, int sequence, CancellationToken cancellationToken = default)
+    {
+        if (attachmentStore == null || sequence < 1) return null;
+
+        var page = await store.GetMessagesAsync(teamKey, caseId, (sequence - 1).ToString(CultureInfo.InvariantCulture), 1, cancellationToken);
+        var originalId = page?.Items?.FirstOrDefault(x => x.Sequence == sequence)?.OriginalId;
+        if (string.IsNullOrEmpty(originalId)) return null;
+
+        await using var opened = await attachmentStore.OpenAsync(caseId, originalId, cancellationToken);
+        if (opened == null) return null;
+
+        using var bytes = new MemoryStream();
+        await opened.Content.CopyToAsync(bytes, cancellationToken);
+
+        return bytes.ToArray();
+    }
+
     public Task<SupportAttachmentLimits> GetAttachmentLimitsAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(_attachmentLimits);
 

@@ -269,6 +269,10 @@ internal sealed class AuditingSupportCaseServiceDecorator(
     public Task<SupportAttachmentContent> OpenAttachmentAsync(string teamKey, string caseId, int sequence, string attachmentId, CancellationToken cancellationToken = default)
         => inner.OpenAttachmentAsync(teamKey, caseId, sequence, attachmentId, cancellationToken);
 
+    /// <remarks>A read, and not audited, like every other read of a case.</remarks>
+    public Task<byte[]> GetMessageOriginalAsync(string teamKey, string caseId, int sequence, CancellationToken cancellationToken = default)
+        => inner.GetMessageOriginalAsync(teamKey, caseId, sequence, cancellationToken);
+
     public Task<SupportAttachmentLimits> GetAttachmentLimitsAsync(CancellationToken cancellationToken = default)
         => inner.GetAttachmentLimitsAsync(cancellationToken);
 

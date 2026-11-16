@@ -96,10 +96,25 @@ public static class SupportTranscriptText
     /// <summary>Before the reason support gave for closing a case, under the closure.</summary>
     public static readonly TextKey ClosedBecause = new("team.support.transcript.closedBecause", "Reason:");
 
+    /// <summary>The button on a received mail that saves it as it arrived, as an <c>.eml</c> file a mail client opens.</summary>
+    public static readonly TextKey DownloadOriginal = new("team.support.transcript.downloadOriginal", "Download original (.eml)");
+
+    /// <summary>The button on a received mail that shows it as it arrived, as plain text.</summary>
+    public static readonly TextKey ReadOriginal = new("team.support.transcript.readOriginal", "Read original");
+
+    /// <summary>The title of the window that shows a received mail as it arrived.</summary>
+    public static readonly TextKey OriginalTitle = new("team.support.transcript.originalTitle", "Original mail");
+
+    /// <summary>Under a received mail whose original could not be read, though it was kept.</summary>
+    public static readonly TextKey OriginalNotAvailable = new("team.support.transcript.originalNotAvailable", "The original mail could not be opened.");
+
+    /// <summary>Above the text of an original too long to show whole; the download has all of it.</summary>
+    public static readonly TextKey OriginalCut = new("team.support.transcript.originalCut", "Only the start is shown. Download the original for all of it.");
+
     /// <summary>Every key here, for the component building its <see cref="TextSet"/>.</summary>
     public static readonly TextKey[] All =
     [
         ClosedBecause, Assistant, Support, NotSentYet, NotDelivered, SendAgain, Typing, WorkingLoop, WorkingLoopTimed, Thinking, ThinkingLoop, ThinkingLoopTimed, Timed, ElapsedSeconds, ElapsedMinutes, ServiceCall, ServiceCalls, Tokens, TokensInOut,
-        Helpful, NotHelpful, RatedHelpful, RatedNotHelpful, NoAnswerYet, NoAnswerAway
+        Helpful, NotHelpful, RatedHelpful, RatedNotHelpful, NoAnswerYet, NoAnswerAway, DownloadOriginal, ReadOriginal, OriginalTitle, OriginalNotAvailable, OriginalCut
     ];
 }

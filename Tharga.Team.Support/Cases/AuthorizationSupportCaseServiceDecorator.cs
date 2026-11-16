@@ -170,6 +170,14 @@ internal sealed class AuthorizationSupportCaseServiceDecorator(
         return await inner.OpenAttachmentAsync(teamKey, caseId, sequence, attachmentId, cancellationToken);
     }
 
+    /// <remarks>Authorized exactly as reading the transcript is, because the original is the mail the entry was made from.</remarks>
+    public async Task<byte[]> GetMessageOriginalAsync(string teamKey, string caseId, int sequence, CancellationToken cancellationToken = default)
+    {
+        await RequireCaseAccessAsync(teamKey, caseId, "read the original mail of", CaseAccessKind.Read);
+
+        return await inner.GetMessageOriginalAsync(teamKey, caseId, sequence, cancellationToken);
+    }
+
     /// <remarks>Never refused: the limits are configuration, and say nothing about any case.</remarks>
     public Task<SupportAttachmentLimits> GetAttachmentLimitsAsync(CancellationToken cancellationToken = default)
         => inner.GetAttachmentLimitsAsync(cancellationToken);

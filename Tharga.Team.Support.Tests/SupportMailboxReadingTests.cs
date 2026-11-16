@@ -57,8 +57,8 @@ public class SupportMailboxReadingTests
 
         Assert.Equal(2, await poller.PollAsync(CancellationToken.None));
 
-        await own.Received(1).FetchAsync(new MailFetchPosition(7, 10), Arg.Any<CancellationToken>());
-        await hosted.Received(1).FetchAsync(new MailFetchPosition(9, 500), Arg.Any<CancellationToken>());
+        await own.Received(1).FetchAsync(new MailFetchPosition(7, 10), true, Arg.Any<CancellationToken>());
+        await hosted.Received(1).FetchAsync(new MailFetchPosition(9, 500), true, Arg.Any<CancellationToken>());
         await _positions.Received(1).SetAsync(ownKey, new SupportMailPosition(7, 11), Arg.Any<CancellationToken>());
         await _positions.Received(1).SetAsync(hostedKey, new SupportMailPosition(9, 501), Arg.Any<CancellationToken>());
     }
@@ -69,7 +69,7 @@ public class SupportMailboxReadingTests
         var own = Client(uidValidity: 7, mails: Mail("own-1@example.org", OwnAddress));
         var hosted = Substitute.For<IMailClient>();
         hosted.CanRead.Returns(true);
-        hosted.FetchAsync(Arg.Any<MailFetchPosition>(), Arg.Any<CancellationToken>()).Returns<MailFetchResult>(_ => throw new TimeoutException("the server went away"));
+        hosted.FetchAsync(Arg.Any<MailFetchPosition>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns<MailFetchResult>(_ => throw new TimeoutException("the server went away"));
         var poller = Build(own, hosted);
 
         Assert.Equal(1, await poller.PollAsync(CancellationToken.None));
@@ -223,7 +223,7 @@ public class SupportMailboxReadingTests
     {
         var client = Substitute.For<IMailClient>();
         client.CanRead.Returns(true);
-        client.FetchAsync(Arg.Any<MailFetchPosition>(), Arg.Any<CancellationToken>())
+        client.FetchAsync(Arg.Any<MailFetchPosition>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
                 var from = call.Arg<MailFetchPosition>();

@@ -117,6 +117,7 @@ internal sealed class EmailEventHandler(
         if (IsEmpty(mail, text)) return EmailHandlingOutcome.Ignored("empty body");
 
         var files = await StoreFilesAsync(supportCase.Id, mail, mailOptions, cancellationToken);
+        var originalId = await StoreOriginalAsync(supportCase.Id, mail, mailOptions, cancellationToken);
         var body = Body(text, files.Notes);
         var html = Html(mail.BodyHtml, textCut, files.Notes);
 
@@ -155,7 +156,8 @@ internal sealed class EmailEventHandler(
             // thread it arrived from.
             Delivery = SupportMessageDelivery.Sent,
             Source = SupportChannelType.Email,
-            Attachments = files.Stored
+            Attachments = files.Stored,
+            OriginalId = originalId
         }, cancellationToken);
 
         // The reply's own id joins the thread, so an answer to it, and a reply to that, find the case exactly.
@@ -347,6 +349,7 @@ internal sealed class EmailEventHandler(
 
         // Stored under the new case's id before the case exists, so its first message can name them.
         var files = await StoreFilesAsync(caseId, mail, mailbox.Options, cancellationToken);
+        var originalId = await StoreOriginalAsync(caseId, mail, mailbox.Options, cancellationToken);
         var body = Body(text, files.Notes);
         var html = Html(mail.BodyHtml, textCut, files.Notes);
 
@@ -393,7 +396,8 @@ internal sealed class EmailEventHandler(
             // reply path mail the customer their own message back.
             Delivery = SupportMessageDelivery.Sent,
             Source = SupportChannelType.Email,
-            Attachments = files.Stored
+            Attachments = files.Stored,
+            OriginalId = originalId
         }, cancellationToken);
 
         if (closed) return EmailHandlingOutcome.Applied(caseId);
@@ -545,6 +549,46 @@ internal sealed class EmailEventHandler(
     /// <summary>What a case opened without a subject is named after: its text, or its files when it has none.</summary>
     private static string SubjectSource(string body, SupportAttachment[] files)
         => string.IsNullOrWhiteSpace(body) ? string.Join(", ", files.Select(x => x.FileName)) : body;
+
+    /// <summary>
+    /// Keeps the mail as it arrived beside the case's files, and returns its id, or null when the mail carries no original, none is wanted
+    /// or it could not be kept.
+    /// </summary>
+    /// <remarks>
+    /// <b>Never loses the mail, and never counts as a file.</b> The ledger has already recorded it, so a store that fails, none registered or an
+    /// original over <see cref="MailOptions.MaxOriginalBytes"/> leaves the message without one and the rest goes on. The original is kept in the
+    /// attachment store but is not listed among the message's files, so the attachment limits do not apply to it and nobody is offered it as one.
+    /// </remarks>
+    private async Task<string> StoreOriginalAsync(string caseId, InboundMail mail, MailOptions mailOptions, CancellationToken cancellationToken)
+    {
+        if (attachmentStore == null || mail.Raw is not { Length: > 0 } raw) return null;
+
+        if (raw.LongLength > mailOptions.MaxOriginalBytes)
+        {
+            logger?.LogInformation("The original of a support mail on case {CaseId} is {Size} bytes, over the limit of {Limit}, so it is not kept.", caseId, raw.LongLength, mailOptions.MaxOriginalBytes);
+            return null;
+        }
+
+        try
+        {
+            using var content = new MemoryStream(raw, false);
+
+            var stored = await attachmentStore.SaveAsync(caseId, new SupportAttachmentUpload
+            {
+                FileName = "original.eml",
+                ContentType = "message/rfc822",
+                Content = content
+            }, cancellationToken);
+
+            return stored.Id;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger?.LogWarning(e, "The original of a support mail on case {CaseId} could not be stored.", caseId);
+
+            return null;
+        }
+    }
 
     /// <summary>
     /// Keeps the mail's files that fit the limits under the case, and notes in the message each one that was

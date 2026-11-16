@@ -72,6 +72,10 @@ public interface ISupportCaseService
     /// <summary>Opens a file carried by one entry of a case, authorized exactly as reading its transcript, or returns null when that entry carries no attachment with this id; the caller disposes it and serves it as <see cref="SupportAttachmentContentTypes.ServedAs"/> says.</summary>
     Task<SupportAttachmentContent> OpenAttachmentAsync(string teamKey, string caseId, int sequence, string attachmentId, CancellationToken cancellationToken = default);
 
+    /// <summary>Reads the mail an entry arrived as, exactly as it was received (a <c>message/rfc822</c> message), authorized exactly as reading its transcript; null when the entry has no original, as everything received before originals were kept.</summary>
+    /// <remarks>A default member returning null, so a host's own implementation keeps compiling; the toolkit's service overrides it.</remarks>
+    Task<byte[]> GetMessageOriginalAsync(string teamKey, string caseId, int sequence, CancellationToken cancellationToken = default) => Task.FromResult<byte[]>(null);
+
     /// <summary>How many files, and how large, a reply or answer may carry, so a component offers what the service accepts.</summary>
     Task<SupportAttachmentLimits> GetAttachmentLimitsAsync(CancellationToken cancellationToken = default);
 

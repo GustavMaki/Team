@@ -205,6 +205,10 @@ public record SupportMessageEntity
     [BsonIgnoreIfNull]
     public string InternalComment { get; init; }
 
+    /// <summary>The id of the stored original mail; absent on every entry that has none.</summary>
+    [BsonIgnoreIfNull]
+    public string OriginalId { get; init; }
+
     /// <summary>The files the entry carries, metadata only; absent when it carries none, as on every entry written before files were kept.</summary>
     [BsonIgnoreIfNull]
     public SupportAttachmentEntity[] Attachments { get; init; }

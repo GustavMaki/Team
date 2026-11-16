@@ -162,7 +162,8 @@ internal sealed class SupportMailPoller(
             }
         }
 
-        var result = await client.FetchAsync(new MailFetchPosition(reader.Position.UidValidity, reader.Position.LastUid), cancellationToken);
+        // With the raw message, so each mail can be kept as it arrived (Tharga/Team#499); a client that cannot supply it reads as before.
+        var result = await client.FetchAsync(new MailFetchPosition(reader.Position.UidValidity, reader.Position.LastUid), true, cancellationToken);
 
         if (result.Error != null)
         {

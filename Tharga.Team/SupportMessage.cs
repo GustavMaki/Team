@@ -90,6 +90,12 @@ public record SupportMessage
     /// <remarks>Internal: only readers with cross-team support access get it back, and it is never sent through a channel.</remarks>
     public string InternalComment { get; init; }
 
+    /// <summary>The id of the mail this entry arrived as, kept as it was received, or null for an entry that has none, such as everything received before originals were kept; read it through <c>ISupportCaseService.GetMessageOriginalAsync</c>.</summary>
+    public string OriginalId { get; init; }
+
+    /// <summary>Whether the entry's original mail is kept, so a reader knows without fetching it.</summary>
+    public bool HasOriginal => !string.IsNullOrEmpty(OriginalId);
+
     /// <summary>The files this entry carries, in the order they arrived; empty for none.</summary>
     public SupportAttachment[] Attachments { get; init; } = [];
 
