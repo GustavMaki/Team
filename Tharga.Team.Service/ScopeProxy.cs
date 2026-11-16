@@ -21,10 +21,13 @@ public class ScopeProxy<T> : DispatchProxy where T : class
     private ServiceScopeKind _scopeKind;
     private AuditMode _defaultAuditMode = AuditMode.Access;
 
+    /// <param name="target">The service to wrap.</param>
+    /// <param name="principalAccessor">Where the caller's claims are read from for each call.</param>
     /// <param name="scopeKind">
     /// Deliberately required. A default would pick an authorization policy on the caller's behalf, which
     /// is how a service ends up enforcing something other than what its author assumed.
     /// </param>
+    /// <param name="auditLogger">Where access decisions are recorded; <c>null</c> records nothing.</param>
     public static T Create(T target, ITeamPrincipalAccessor principalAccessor, ServiceScopeKind scopeKind, IAuditLogger auditLogger = null)
         => Create(target, principalAccessor, scopeKind, auditLogger, AuditMode.Access);
 

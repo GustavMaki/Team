@@ -10,7 +10,7 @@ namespace Tharga.Team;
 /// if neither.
 /// </summary>
 /// <remarks>
-/// Named a <i>grant</i> to keep it clear of <see cref="TeamAccess"/>, the unrelated ambient API for
+/// Named a <i>grant</i> to keep it clear of <see cref="Tharga.Team.Service.TeamAccess"/>, the unrelated ambient API for
 /// declaring deliberate access from service code.
 /// </remarks>
 /// <param name="AccessLevel">The level the access is held at.</param>

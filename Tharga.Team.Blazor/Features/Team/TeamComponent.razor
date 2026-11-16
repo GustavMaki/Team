@@ -1523,7 +1523,6 @@ else
         _myAccessRequests = _canSeeAllTeams && TeamAccessRequestGate.CanRequest(false, _callerRoles, _consentRoles)
             ? await AccessRequestService.GetMyAccessRequestsAsync()
             : [];
-        StateHasChanged();
     }
 
     private AccessLevel? ConsentOf(ITeam<TMember> team)

@@ -39,7 +39,7 @@ public sealed class SupportAiConnectionEndpointTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
 
-        builder.Services.AddAuthentication(TestCaller.Scheme).AddScheme<AuthenticationSchemeOptions, TestCaller>(TestCaller.Scheme, _ => { });
+        builder.Services.AddAuthentication(TestCaller.SchemeName).AddScheme<AuthenticationSchemeOptions, TestCaller>(TestCaller.SchemeName, _ => { });
         builder.Services.AddAuthorizationBuilder().AddPolicy(ApiKeyConstants.ThargaApiPolicyName, x => x.RequireAuthenticatedUser());
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<ITeamPrincipalAccessor, HttpContextTeamPrincipalAccessor>();
@@ -207,7 +207,7 @@ public sealed class SupportAiConnectionEndpointTests : IAsyncLifetime
     private sealed class TestCaller(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
-        public const string Scheme = "test";
+        public const string SchemeName = "test";
         public const string Header = "X-Test-Caller";
         public const string TeamHeader = "X-Test-Team";
         public const string ScopeHeader = "X-Test-Scope";
@@ -220,7 +220,7 @@ public sealed class SupportAiConnectionEndpointTests : IAsyncLifetime
             if (Request.Headers.TryGetValue(TeamHeader, out var team)) claims.Add(new Claim(TeamClaimTypes.TeamKey, team.ToString()));
             if (Request.Headers.TryGetValue(ScopeHeader, out var scope)) claims.Add(new Claim(TeamClaimTypes.Scope, scope.ToString()));
 
-            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme)), Scheme)));
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName)), SchemeName)));
         }
     }
 }

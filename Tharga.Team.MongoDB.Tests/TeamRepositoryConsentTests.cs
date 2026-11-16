@@ -35,7 +35,7 @@ public class TeamRepositoryConsentTests
     {
         UpdateDefinition<TestTeamEntity> captured = null;
         var collection = Substitute.For<ITeamRepositoryCollection<TestTeamEntity, TestMember>>();
-        collection.UpdateOneAsync(Arg.Any<FilterDefinition<TestTeamEntity>>(), Arg.Do<UpdateDefinition<TestTeamEntity>>(u => captured = u));
+        _ = collection.UpdateOneAsync(Arg.Any<FilterDefinition<TestTeamEntity>>(), Arg.Do<UpdateDefinition<TestTeamEntity>>(u => captured = u));
 
         await act(new TeamRepository<TestTeamEntity, TestMember>(collection));
 

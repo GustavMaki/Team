@@ -216,9 +216,4 @@ public static class ThargaTeamRegistration
 
         app.UseThargaTeamBlazor();
     }
-
-    /// <summary>
-    /// Serves stored icons at <see cref="IconRoute.Base"/>/{reference} for authenticated callers. The
-    /// reference changes whenever the icon changes, so a served URL is immutable and cached aggressively.
-    /// </summary>
 }

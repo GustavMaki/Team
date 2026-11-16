@@ -33,6 +33,8 @@ public abstract class TeamServiceBase : ITeamService
     /// registered, or a multi-instance deployment will not see permission changes made through another
     /// instance. See <see cref="ITeamCache"/>.
     /// </param>
+    /// <param name="deleteMode">What <c>DeleteTeamAsync</c> does to a team; soft by default. See <see cref="TeamDeleteMode"/>.</param>
+    /// <param name="invitationOptions">How long an invitation stays acceptable; the defaults when <c>null</c>. See <see cref="InvitationOptions"/>.</param>
     protected TeamServiceBase(
         IUserService userService,
         ILogger<TeamServiceBase> logger = null,

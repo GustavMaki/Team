@@ -36,7 +36,7 @@ public sealed record TeamAccessContext
 
 /// <summary>
 /// Ambient record of the authorization decision covering the current call flow, read by
-/// <see cref="TeamAccessInterceptor"/> at the database boundary.
+/// <c>TeamAccessInterceptor</c> (in Tharga.Team.Service) at the database boundary.
 /// </summary>
 /// <remarks>
 /// The authorization layer opens a scope for you, so a correctly registered service never touches this

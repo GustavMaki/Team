@@ -17,7 +17,7 @@ namespace Tharga.Team.Blazor.Features.Simulation;
 /// It is a single value that <c>[RequireAccessLevel]</c> reads directly, and the matching
 /// <c>Team{Level}</c> role is what <c>AuthorizeView Roles="…"</c> matches, so a simulation that only
 /// removed them would show a caller with no level at all rather than a lower one. Both move together,
-/// through <see cref="AccessLevelPrivilege.Clamp"/>, so they cannot disagree and neither can rise.
+/// through <see cref="AccessLevelPrivilege.Clamp(AccessLevel, AccessLevel)"/>, so they cannot disagree and neither can rise.
 /// </para>
 /// <para>
 /// Identity claims — name, subject, email, <see cref="TeamClaimTypes.MemberKey"/>,
@@ -64,7 +64,7 @@ internal static class AccessSimulationFilter
 
     /// <remarks>
     /// The only place a claim is added, and it can only ever replace a level with a less privileged one.
-    /// If the requested level is an escalation, <see cref="AccessLevelPrivilege.Clamp"/> returns the real
+    /// If the requested level is an escalation, <see cref="AccessLevelPrivilege.Clamp(AccessLevel, AccessLevel)"/> returns the real
     /// level and nothing changes.
     /// </remarks>
     private static void ApplyAccessLevel(ClaimsIdentity identity, AccessLevel? requested)

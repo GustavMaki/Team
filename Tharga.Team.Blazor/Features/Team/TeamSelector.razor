@@ -1,4 +1,5 @@
-﻿@using Microsoft.Extensions.Options
+﻿@using Microsoft.Extensions.Logging
+@using Microsoft.Extensions.Options
 @using Tharga.Team
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ITeamStateService TeamStateService
@@ -7,6 +8,7 @@
 @inject IThargaTextProvider TextProvider
 @inject IOptions<ThargaBlazorOptions> BlazorOptions
 @inject IServiceProvider Services
+@inject ILogger<TeamSelector> Logger
 
 <style>
     /* The open list as wide as its widest team, so a name never wraps onto a second line. Radzen pins the
@@ -229,24 +231,47 @@
         var configuredPath = BlazorOptions.Value.CreateTeamPath;
         if (!string.IsNullOrWhiteSpace(configuredPath)) _createTeamPath = configuredPath;
 
+        // These handlers are async lambdas on events that return void, so nothing awaits them: an exception that escaped one would be
+        // raised on the circuit's synchronization context and end the circuit. Each says so in the log instead.
         TeamStateService.SelectedTeamChangedEvent += async (_, e) =>
         {
-            _selectedTeam = e.SelectedTeam;
-            await InvokeAsync(StateHasChanged);
+            try
+            {
+                _selectedTeam = e.SelectedTeam;
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                TeamComponentLog.SelectionNotShown(Logger, ex);
+            }
         };
 
         // A team the host's guard refused did not become the selection, so the picker goes back to what is, and says why.
         _refusal = TeamEntry?.Refusal;
         if (TeamEntry != null) TeamEntry.RefusalChanged += async (_, refusal) =>
         {
-            _refusal = refusal;
-            if (refusal != null) _selectedTeam = TeamStateService.TryGetSelectedTeam(out var held) ? held : null;
-            await InvokeAsync(StateHasChanged);
+            try
+            {
+                _refusal = refusal;
+                if (refusal != null) _selectedTeam = TeamStateService.TryGetSelectedTeam(out var held) ? held : null;
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                TeamComponentLog.RefusalNotShown(Logger, ex);
+            }
         };
 
         TeamStateService.TeamsListChangedEvent += async (_, _) =>
         {
-            await ReloadTeams();
+            try
+            {
+                await ReloadTeams();
+            }
+            catch (Exception ex)
+            {
+                TeamComponentLog.TeamListNotReloaded(Logger, ex);
+            }
         };
 
         var current = await AuthenticationStateProvider.GetAuthenticationStateAsync();

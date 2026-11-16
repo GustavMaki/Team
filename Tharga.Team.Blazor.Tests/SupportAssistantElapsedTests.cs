@@ -74,23 +74,23 @@ public class SupportAssistantElapsedTests : BunitContext
     }
 
     [Fact]
-    public void TheWholeTextIsOneTranslation_WithThePassAndTheTimeWhereTheLanguageWantsThem()
+    public async Task TheWholeTextIsOneTranslation_WithThePassAndTheTimeWhereTheLanguageWantsThem()
     {
-        var swedish = new Translating(new Dictionary<string, string>
+        var swedish = await new Translating(new Dictionary<string, string>
         {
             [SupportTranscriptText.WorkingLoopTimed.Key] = "Arbetar {0} ({1})",
             [SupportTranscriptText.ElapsedMinutes.Key] = "{0} min {1} s",
             [SupportTranscriptText.ElapsedSeconds.Key] = "{0} s"
-        }).ResolveAsync(SupportTranscriptText.All).GetAwaiter().GetResult();
+        }).ResolveAsync(SupportTranscriptText.All);
 
         Assert.Equal("Arbetar 2 (1 min 23 s)", SupportAssistantSteps.Describe(swedish, Round(3), "Arbetar", Started.AddSeconds(83)));
         Assert.Equal("Arbetar 2 (23 s)", SupportAssistantSteps.Describe(swedish, Round(3), "Arbetar", Started.AddSeconds(23)));
     }
 
     [Fact]
-    public void AHostCanPutTheTimeBeforeThePass()
+    public async Task AHostCanPutTheTimeBeforeThePass()
     {
-        var reordered = new Translating(new Dictionary<string, string> { [SupportTranscriptText.WorkingLoopTimed.Key] = "({1}) round {0}" }).ResolveAsync(SupportTranscriptText.All).GetAwaiter().GetResult();
+        var reordered = await new Translating(new Dictionary<string, string> { [SupportTranscriptText.WorkingLoopTimed.Key] = "({1}) round {0}" }).ResolveAsync(SupportTranscriptText.All);
 
         Assert.Equal("(23s) round 2", SupportAssistantSteps.Describe(reordered, Round(3), "Working", Started.AddSeconds(23)));
     }
@@ -195,7 +195,7 @@ public class SupportAssistantElapsedTests : BunitContext
 
         public override ITimer CreateTimer(TimerCallback callback, object state, TimeSpan dueTime, TimeSpan period)
         {
-            var timer = new ManualTimer(this, callback, state, period);
+            var timer = new ManualTimer(this, callback, state);
             _timers.Add(timer);
 
             return timer;
@@ -213,7 +213,7 @@ public class SupportAssistantElapsedTests : BunitContext
 
         internal void Remove(ManualTimer timer) => _timers.Remove(timer);
 
-        internal sealed class ManualTimer(ManualTime owner, TimerCallback callback, object state, TimeSpan period) : ITimer
+        internal sealed class ManualTimer(ManualTime owner, TimerCallback callback, object state) : ITimer
         {
             public void Tick() => callback(state);
 

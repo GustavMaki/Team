@@ -27,6 +27,7 @@ public interface IExternalSupportCaseService
     /// <param name="contact">Who wrote; the address is required.</param>
     /// <param name="subject">The subject, or <c>null</c> to derive one from the message.</param>
     /// <param name="body">What the visitor wrote.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
     /// <exception cref="ArgumentException">The address is missing or malformed, the message is empty, or something is longer than <see cref="SupportCaseLimits"/> allows.</exception>
     Task<SupportCase> RaiseExternalCaseAsync(ExternalSupportContact contact, string subject, string body, CancellationToken cancellationToken = default);
 }
