@@ -59,6 +59,12 @@ public static class ThargaTeamRegistration
         services.TrackMongoCollection(typeof(IContactMessageCollection), typeof(ContactMessageCollection));
         services.TryAddScoped<IContactMessageLog, MongoContactMessageLog>();
 
+        // Server-side sessions (Tharga/Team#471). Always registered, like every store; nothing reads or writes it until the host registers an
+        // ISessionPolicy. TryAdd so a host keeping sessions elsewhere wins.
+        services.AddTransient<IUserSessionCollection, UserSessionCollection>();
+        services.TrackMongoCollection(typeof(IUserSessionCollection), typeof(UserSessionCollection));
+        services.TryAddScoped<IUserSessionStore, MongoUserSessionStore>();
+
         // Automatic notices: occurrences until distributed, each user's notices and streams until mailed, and the
         // choices and team defaults that differ from a default. TryAdd so a host keeping them elsewhere wins.
         services.AddTransient<IUserNoticeCollection, UserNoticeCollection>();

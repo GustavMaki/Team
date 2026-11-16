@@ -61,5 +61,7 @@
     <InternalsVisibleTo Include="Tharga.Team.Blazor" />
     <InternalsVisibleTo Include="Tharga.Team.Mcp" />
     <InternalsVisibleTo Include="Tharga.Team.Service.Tests" />
+    <!-- The Blazor session check reaches sessions through the internal UserSessionService, and its tests build one over a test store (Tharga/Team#471). -->
+    <InternalsVisibleTo Include="Tharga.Team.Blazor.Tests" />
   </ItemGroup>
 </Project>

@@ -260,7 +260,7 @@ See [Team & user icons](docs/articles/icons.md).
 
 ## Live claim revalidation
 
-Team claims (membership, access level, tenant-role scopes, consent access) are enriched at HTTP authentication, so in a long-lived Blazor Server circuit they would otherwise stay frozen until a reload — a removed member, a downgraded access level, or a revoked consent would keep their old access, in the service-layer checks as well as the UI. Tharga.Team revalidates them on an interval and refreshes the principal **in place**, so team access is stale for at most one interval. A change in team access never signs anybody out — the session is still valid, only the access moved. The one exception is a **disabled user**, who is signed out on the same interval. On by default (30 min); tune or disable it:
+Team claims (membership, access level, tenant-role scopes, consent access) are enriched at HTTP authentication, so in a long-lived Blazor Server circuit they would otherwise stay frozen until a reload — a removed member, a downgraded access level, or a revoked consent would keep their old access, in the service-layer checks as well as the UI. Tharga.Team revalidates them on an interval and refreshes the principal **in place**, so team access is stale for at most one interval. A change in team access never signs anybody out — the session is still valid, only the access moved. The exceptions are a **disabled user**, and, with session limits on, a **server-side session that has ended**, both signed out on the same interval. On by default (30 min); tune or disable it:
 
 ```csharp
 builder.AddThargaTeam(o =>
@@ -271,6 +271,20 @@ builder.AddThargaTeam(o =>
 ```
 
 See [Team-claim revalidation](docs/articles/implementation-guide.md#team-claim-revalidation).
+
+## Session limits
+
+A host can limit how long a sign-in lasts, per team: register an `ISessionPolicy` returning a max age from
+the sign-in, an idle timeout, and whether a person may have one session in the team at a time (the newest sign-in
+wins). Every sign-in then becomes a server-side session, checked on each request and in each live circuit, ended and
+audited once, and the browser is told why. Idle time counts what the person does inside a circuit too. With no policy
+registered, nothing changes; cookies from before the upgrade are adopted, never signed out.
+
+```csharp
+builder.Services.AddScoped<ISessionPolicy, MySessionPolicy>();
+```
+
+See [Session limits](docs/articles/implementation-guide.md#session-limits).
 
 ## Naming a team on an MCP call
 

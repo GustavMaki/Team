@@ -130,6 +130,12 @@ public record ThargaTeamOptions
     /// <summary>Collection holding the addresses that opted out of contact mail, kept for good, default <c>ContactMailSuppression</c>.</summary>
     public string ContactMailSuppressionCollectionName { get; set; } = DefaultContactMailSuppressionCollectionName;
 
+    /// <summary>The default for <see cref="UserSessionCollectionName"/>.</summary>
+    public const string DefaultUserSessionCollectionName = "UserSession";
+
+    /// <summary>Collection holding server-side sessions, one document per sign-in, ended ones expiring after 30 days, default <c>UserSession</c> (Tharga/Team#471).</summary>
+    public string UserSessionCollectionName { get; set; } = DefaultUserSessionCollectionName;
+
     /// <summary>The default for <see cref="ContactMessageCollectionName"/>.</summary>
     public const string DefaultContactMessageCollectionName = "ContactMessage";
 

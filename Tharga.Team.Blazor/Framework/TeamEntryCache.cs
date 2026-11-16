@@ -9,8 +9,8 @@ namespace Tharga.Team.Blazor.Framework;
 /// </summary>
 /// <remarks>
 /// <b>Keyed by the session as well as the user and the team</b>, because the answer depends on how the person signed in: one who has stepped up in
-/// one browser must not carry that to another that has not. The session is told apart by the claims the sign-in left on the principal
-/// (<c>sid</c>, else <c>auth_time</c>, <c>idp</c> and <c>amr</c>), which a host's guard reads too.
+/// one browser must not carry that to another that has not. The session is told apart by the library's own session claim when sessions are on, else by
+/// the claims the sign-in left on the principal (<c>sid</c>, else <c>auth_time</c>, <c>idp</c> and <c>amr</c>), which a host's guard reads too.
 /// <para>
 /// Per instance, so <see cref="InvalidateAsync"/> reaches this instance's circuits at once and another instance when its answer expires.
 /// </para>
@@ -58,9 +58,15 @@ internal sealed class TeamEntryCache(TimeProvider timeProvider) : ITeamEntryGuar
         return Task.CompletedTask;
     }
 
-    /// <summary>Tells the sign-in sessions of one person apart: the session id when there is one, otherwise what the sign-in proved.</summary>
+    /// <summary>
+    /// Tells the sign-in sessions of one person apart: the library's own session claim when there is one (Tharga/Team#471), issued by the server and unique
+    /// per sign-in; else the identity provider's <c>sid</c>, which may be shared or absent; otherwise what the sign-in proved.
+    /// </summary>
     public static string SessionOf(ClaimsPrincipal principal)
     {
+        var session = principal?.FindFirst(TeamClaimTypes.SessionId)?.Value;
+        if (!string.IsNullOrEmpty(session)) return session;
+
         var sid = principal?.FindFirst("sid")?.Value;
         if (!string.IsNullOrEmpty(sid)) return sid;
 

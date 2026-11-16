@@ -1,0 +1,33 @@
+@page "/session-ended"
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Authorization
+@inject NavigationManager Navigation
+
+<PageTitle>Signed out</PageTitle>
+
+@* Where the toolkit sends a browser whose server-side session ended (o.Blazor.Sessions.EndedPath), with the reason as a code in ?reason=.
+   Anonymous on purpose: the session is gone, so a page that needed a sign-in would send the browser straight to the provider instead. The code is
+   never shown as it is; only the known ones map to words, so nothing a visitor typed into the address ends up on the page. *@
+
+<RadzenStack Gap="1rem" Style="max-width: 40rem;">
+    <RadzenText TextStyle="TextStyle.H4" class="rz-m-0">You have been signed out</RadzenText>
+    <RadzenText TextStyle="TextStyle.Body1" class="rz-m-0">@Explanation</RadzenText>
+    <div>
+        <RadzenButton Text="Sign in again" Icon="login" Click="@(() => Navigation.NavigateTo("/login", forceLoad: true))" />
+    </div>
+</RadzenStack>
+
+@code {
+    [SupplyParameterFromQuery(Name = "reason")]
+    public string Reason { get; set; }
+
+    private string Explanation => Reason switch
+    {
+        "idle" => "Your session ended because it was not used for a while. Teams named Strict end a session after two minutes without use.",
+        "maxage" => "Your session reached the longest time this team allows from a sign-in.",
+        "newersignin" => "You signed in somewhere else, and this team allows one session per person at a time, so the newer one took over.",
+        "ended" => "You ended this session from another of your sessions.",
+        "signedout" => "You signed out.",
+        _ => "Your session has ended."
+    };
+}
