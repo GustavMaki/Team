@@ -36,7 +36,8 @@ internal sealed class SupportCaseService(
     ILogger<SupportCaseService> logger = null,
     SupportAnswerOptions answerOptions = null,
     SupportMailboxes mailboxes = null,
-    ISupportCaseContactResolver contactResolver = null) : ISupportCaseService, ISupportCaseTeamQueries
+    ISupportCaseContactResolver contactResolver = null,
+    ITeamOversightService teamOversight = null) : ISupportCaseService, ISupportCaseTeamQueries
 {
     private readonly SupportAttachmentLimits _attachmentLimits = attachmentLimits ?? SupportAttachmentLimits.Default;
     private readonly ISupportAssistantUsageSink[] _usageSinks = usageSinks?.ToArray() ?? [];
@@ -867,7 +868,7 @@ internal sealed class SupportCaseService(
         // Conditional in the store, so two agents triaging the same queue do not both assign it. The loser
         // is told rather than left looking at a button that did nothing -- the case is now somebody else's,
         // and a queue that silently swallows the second click is how an operator stops trusting it.
-        if (!await store.TryAssignCaseAsync(caseId, teamKey, note, cancellationToken)) return false;
+        if (!await store.TryAssignCaseAsync(caseId, teamKey, await AssignedTeamNameAsync(teamKey), note, cancellationToken)) return false;
 
         Notify(teamKey, caseId, SupportCaseChange.Assigned);
 
@@ -1164,6 +1165,32 @@ internal sealed class SupportCaseService(
     /// Best effort: a case is raised whether or not a name can be read, so a host without a directory, or one
     /// that fails, simply gets a case worded with the key.
     /// </remarks>
+    /// <summary>
+    /// The name of the team a case is being given (Tharga/Team#500). Staff who triage the unassigned queue are usually not
+    /// members of the team they assign to, so the caller's own team list would not hold it: the oversight read is tried first,
+    /// the same one the queue's team picker is built from, and the caller's own teams after it.
+    /// </summary>
+    /// <remarks>Best effort, like <see cref="TeamNameAsync"/>: a case is assigned whether or not a name can be read.</remarks>
+    private async Task<string> AssignedTeamNameAsync(string teamKey)
+    {
+        if (teamOversight != null)
+        {
+            try
+            {
+                await foreach (var team in teamOversight.GetAllTeamsAsync())
+                {
+                    if (team.Key == teamKey && !string.IsNullOrWhiteSpace(team.Name)) return team.Name;
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Not allowed to list every team, or the read failed: the caller's own teams may still hold it.
+            }
+        }
+
+        return await TeamNameAsync(teamKey);
+    }
+
     private async Task<string> TeamNameAsync(string teamKey)
     {
         if (teamDirectory == null || string.IsNullOrEmpty(teamKey)) return null;

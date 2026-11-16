@@ -43,6 +43,10 @@
         </div>
     }
 
+    @* Both ways to give the case a team are left out when the host owns assignment (ShowAssignment = false), as in a host that
+       links a case to its own records in Extras and wants one control for it. The suggestions stay on the case for that control to show. *@
+    @if (ShowAssignment)
+    {
     @* Offered only for a team that is listed: one deleted since the mail arrived would take the case into nobody's queue. *@
     @if (Case.SuggestedTeams is { Length: > 0 })
     {
@@ -87,6 +91,7 @@
             @_text[SupportUnassignedViewText.CannotListTeams]
         </RadzenText>
     }
+    }
 </RadzenStack>
 
 @code {
@@ -95,6 +100,13 @@
 
     /// <summary>The teams the case may be given, in the order to offer them; empty when the reader cannot list teams.</summary>
     [Parameter] public SupportCaseTeam[] Teams { get; set; } = [];
+
+    /// <summary>
+    /// Whether the conversation offers to give the case a team: the suggested teams and the team dropdown. Set to <c>false</c> when
+    /// the host assigns in its own control, for example next to the link to its own records in <see cref="Extras"/>
+    /// (Tharga/Team#500). The case still carries <c>SuggestedTeams</c> and <c>SuggestionReason</c> for that control to show.
+    /// </summary>
+    [Parameter] public bool ShowAssignment { get; set; } = true;
 
     /// <summary>How a time is shown; the host's own date setting. Defaults to the local short date and time.</summary>
     [Parameter] public RenderFragment<DateTime> TimeTemplate { get; set; }

@@ -289,7 +289,10 @@ internal sealed class MongoSupportCaseStore(ISupportCaseRepositoryCollection col
         return PageAsync(filter, cursor, pageSize);
     }
 
-    public async Task<bool> TryAssignCaseAsync(string caseId, string teamKey, SupportMessage assignmentMessage, CancellationToken cancellationToken = default)
+    public Task<bool> TryAssignCaseAsync(string caseId, string teamKey, SupportMessage assignmentMessage, CancellationToken cancellationToken = default)
+        => TryAssignCaseAsync(caseId, teamKey, null, assignmentMessage, cancellationToken);
+
+    public async Task<bool> TryAssignCaseAsync(string caseId, string teamKey, string teamName, SupportMessage assignmentMessage, CancellationToken cancellationToken = default)
     {
         var entity = await collection.GetOneAsync(
             Builders<SupportCaseEntity>.Filter.Eq(x => x.CaseId, caseId));
@@ -308,6 +311,9 @@ internal sealed class MongoSupportCaseStore(ISupportCaseRepositoryCollection col
             .Set(x => x.TeamKey, teamKey)
             .Set(x => x.LastMessageAt, assignmentMessage.SentAt)
             .Push(x => x.Messages, ToEntity(assignmentMessage with { Sequence = NextSequence(entity) }));
+
+        // The name goes with the key, so a case given a team by hand carries it as one placed on receipt does.
+        if (!string.IsNullOrWhiteSpace(teamName)) update = update.Set(x => x.TeamName, teamName);
 
         var result = await collection.UpdateOneAsync(filter, update);
 

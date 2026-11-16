@@ -511,6 +511,48 @@ public class SupportUnassignedViewRenderTests : BunitContext
     }
 
     /// <summary>
+    /// Tharga/Team#500: a host that assigns in its own control (next to its link to its own records, in the extras) turns the package's two
+    /// ways off, so the reader is not offered two. Everything else in the conversation stays.
+    /// </summary>
+    [Fact]
+    public void WithAssignmentLeftToTheHost_NeitherTheSuggestionsNorTheDropdownRender()
+    {
+        var view = RenderView(out _, items: [Suggesting(SupportTeamSuggestionReason.SenderNotVerified, "acme")], showAssignment: false);
+
+        Open(view, Case.Id);
+
+        Assert.Empty(view.FindAll("[data-suggestions='case-1']"));
+        Assert.Empty(view.FindComponents<RadzenDropDown<string>>());
+        Assert.DoesNotContain(view.FindAll("button"), b => b.TextContent.Trim() == "Assign");
+        Assert.DoesNotContain(view.FindAll("button"), b => b.TextContent.Trim() == "Assign to Acme");
+        // The rest of the conversation is unchanged: the answer and close actions are still there.
+        Assert.NotEmpty(view.FindAll("[data-answer='case-1']"));
+        Assert.NotEmpty(view.FindAll("[data-close='case-1']"));
+    }
+
+    /// <summary>Without the cross-team read the view says assigning needs a grant; a host that does its own assigning has no use for that note.</summary>
+    [Fact]
+    public void WithAssignmentLeftToTheHost_TheNoteAboutTheMissingGrantIsLeftOutToo()
+    {
+        var view = RenderView(out _, withOversight: false, showAssignment: false);
+
+        Open(view, Case.Id);
+
+        Assert.DoesNotContain("cross-team read grant", view.Markup);
+    }
+
+    [Fact]
+    public void ByDefault_TheConversationOffersAssignmentAsBefore()
+    {
+        var view = RenderView(out _, items: [Suggesting(SupportTeamSuggestionReason.SenderNotVerified, "acme")]);
+
+        Open(view, Case.Id);
+
+        Assert.NotEmpty(view.FindAll("[data-suggestions='case-1']"));
+        Assert.NotEmpty(view.FindComponents<RadzenDropDown<string>>());
+    }
+
+    /// <summary>
     /// The teams the sender matched are offered with why none was chosen, and one click gives the case one of
     /// them through the same operation the dropdown uses.
     /// </summary>
@@ -677,11 +719,12 @@ public class SupportUnassignedViewRenderTests : BunitContext
         int awaiting = 0,
         RenderFragment<DateTime> timeTemplate = null,
         string storageKey = null,
-        Mock<ISupportCaseNotifier> notifier = null)
+        Mock<ISupportCaseNotifier> notifier = null,
+        bool showAssignment = true)
     {
         cases = Cases(items ?? [Case], assignSucceeds, awaiting);
 
-        return Render(cases, withOversight, timeTemplate, storageKey, notifier);
+        return Render(cases, withOversight, timeTemplate, storageKey, notifier, showAssignment);
     }
 
     private IRenderedComponent<SupportUnassignedView> Render(
@@ -689,7 +732,8 @@ public class SupportUnassignedViewRenderTests : BunitContext
         bool withOversight = true,
         RenderFragment<DateTime> timeTemplate = null,
         string storageKey = null,
-        Mock<ISupportCaseNotifier> notifier = null)
+        Mock<ISupportCaseNotifier> notifier = null,
+        bool showAssignment = true)
     {
         Services.AddSingleton(cases.Object);
         Services.AddSingleton((notifier ?? new Mock<ISupportCaseNotifier>()).Object);
@@ -707,6 +751,7 @@ public class SupportUnassignedViewRenderTests : BunitContext
         {
             p.Add(x => x.TimeTemplate, timeTemplate);
             if (storageKey != null) p.Add(x => x.StorageKey, storageKey);
+            p.Add(x => x.ShowAssignment, showAssignment);
         });
     }
 
