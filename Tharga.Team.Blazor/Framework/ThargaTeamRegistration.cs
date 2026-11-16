@@ -45,9 +45,9 @@ public static class ThargaTeamRegistration
         // Auth (Azure AD + OIDC)
         builder.AddThargaAuth(o =>
         {
-            o.LoginPath = options.Auth.LoginPath;
-            o.LogoutPath = options.Auth.LogoutPath;
-            o.ValidateConfiguration = options.Auth.ValidateConfiguration;
+            // Every public setting, by reflection. A hand-written list of three dropped FederatedSignOut and
+            // PromptForAccount, so a host could set either through the facade and see no effect.
+            OptionsForwarder.Copy(options.Auth, o);
         });
 
         // API key authentication scheme
