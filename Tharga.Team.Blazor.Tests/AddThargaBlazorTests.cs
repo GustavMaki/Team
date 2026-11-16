@@ -32,6 +32,17 @@ public class AddThargaTeamBlazorTests
     }
 
     [Fact]
+    public void AddThargaTeamBlazor_RegistersTheLocalStorageTheComponentsInject()
+    {
+        var services = new ServiceCollection();
+
+        services.AddThargaTeamBlazor();
+
+        // Tharga.Blazor has deprecated its own registration of this; the package that injects it has to provide it.
+        Assert.Contains(services, x => x.ServiceType == typeof(Blazored.LocalStorage.ILocalStorageService));
+    }
+
+    [Fact]
     public void AddThargaTeamBlazor_RegistersThargaBlazorOptions()
     {
         var services = new ServiceCollection();
