@@ -77,9 +77,17 @@ internal class TeamStateService : ITeamStateService
             }
         };
 
+        // An async lambda on an event that returns void, so nothing awaits it: an exception that escaped would end the circuit.
         _teamService.SelectTeamEvent += async (_, e) =>
         {
-            if (e.Team != null) await SetSelectedTeamAsync(e.Team);
+            try
+            {
+                if (e.Team != null) await SetSelectedTeamAsync(e.Team);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "The team the service picked could not be selected.");
+            }
         };
     }
 

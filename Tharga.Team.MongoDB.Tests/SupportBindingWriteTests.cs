@@ -60,7 +60,7 @@ public class SupportBindingWriteTests
     public async Task ACaseOpenedFromAMail_KeepsItsMailBinding_SoAnAnswerCanBeMailedBack()
     {
         SupportCaseEntity added = null;
-        _collection.AddAsync(Arg.Do<SupportCaseEntity>(x => added = x));
+        _ = _collection.AddAsync(Arg.Do<SupportCaseEntity>(x => added = x));
         var mail = new SupportChannelBinding { ChannelType = SupportChannelType.Email, ExternalId = "<m1@example.org>", Address = "anna@example.org" };
 
         await new MongoSupportCaseStore(_collection).AddCaseAsync(

@@ -271,6 +271,7 @@ public interface ISupportCaseService
     /// from and the one it goes from unless they pick another, for a send-from picker beside the message.
     /// </summary>
     /// <param name="to">The address it will go to, so a non-production redirect or withhold is shown; null when not known yet.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
     /// <remarks>Authorized as starting a case is: support staff only. The default throws, so a host's own implementation keeps compiling.</remarks>
     /// <exception cref="InvalidOperationException">No mail is set up for support.</exception>
     Task<SupportAnswerRoute> GetStartMailRouteAsync(string to = null, CancellationToken cancellationToken = default)

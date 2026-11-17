@@ -27,6 +27,7 @@ public interface ITeamEntryGuard
     /// <summary>Whether <paramref name="user"/> may work in the team now.</summary>
     /// <param name="user">The caller, as their claims stand; read what the sign-in proved (<c>amr</c>, <c>auth_time</c>, ...) from it.</param>
     /// <param name="teamKey">The team they are entering.</param>
+    /// <param name="cancellationToken">Cancels the check.</param>
     Task<TeamEntryDecision> CheckAsync(ClaimsPrincipal user, string teamKey, CancellationToken cancellationToken = default);
 }
 

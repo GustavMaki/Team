@@ -55,7 +55,8 @@
 
     private async Task CopyAsync()
     {
-        await Js.InvokeVoidAsync("clipboard.copyText", ApiKey);
+        if (!await Js.TryCopyToClipboardAsync(ApiKey)) return;
+
         NotificationService.Notify(NotificationSeverity.Success, _text[ApiKeyRevealDialogText.Copied]);
     }
 }

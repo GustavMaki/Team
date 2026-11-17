@@ -565,11 +565,13 @@ else
                     }
                 }
 
-                await Js.InvokeVoidAsync("clipboard.copyText", link);
-                NotificationService.Notify(new NotificationMessage
+                if (await Js.TryCopyToClipboardAsync(link))
                 {
-                    Summary = _text[TeamComponentText.InviteLinkCopied]
-                });
+                    NotificationService.Notify(new NotificationMessage
+                    {
+                        Summary = _text[TeamComponentText.InviteLinkCopied]
+                    });
+                }
             }
         }
     }
@@ -1523,7 +1525,6 @@ else
         _myAccessRequests = _canSeeAllTeams && TeamAccessRequestGate.CanRequest(false, _callerRoles, _consentRoles)
             ? await AccessRequestService.GetMyAccessRequestsAsync()
             : [];
-        StateHasChanged();
     }
 
     private AccessLevel? ConsentOf(ITeam<TMember> team)
@@ -1601,7 +1602,8 @@ else
 
         var link = BuildInviteLink(team.Key, member.Invitation.InviteKey);
 
-        await Js.InvokeVoidAsync("clipboard.copyText", link);
+        if (!await Js.TryCopyToClipboardAsync(link)) return;
+
         NotificationService.Notify(new NotificationMessage
         {
             Summary = _text[TeamComponentText.InviteLinkCopied]

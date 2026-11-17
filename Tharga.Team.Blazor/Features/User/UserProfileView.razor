@@ -151,7 +151,8 @@
     private async Task SaveName()
     {
         var trimmed = string.IsNullOrWhiteSpace(_editedName) ? null : _editedName.Trim();
-        if (trimmed == _user?.Name)
+        // No user to write to, as when the profile could not be read: there is nothing to save, and saving would dereference it.
+        if (_user == null || trimmed == _user.Name)
         {
             _editingName = false;
             return;
@@ -171,7 +172,6 @@
         if (result is true)
         {
             _user = await UserService.GetCurrentUserAsync();
-            StateHasChanged();
         }
     }
 
@@ -184,6 +184,6 @@
             Claims = principal.Claims.Select(c => new { c.Type, c.Value }).ToArray()
         };
         var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-        await JS.InvokeVoidAsync("navigator.clipboard.writeText", json);
+        await JS.TryCopyToClipboardAsync(json, "navigator.clipboard.writeText");
     }
 }

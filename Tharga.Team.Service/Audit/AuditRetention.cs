@@ -7,7 +7,7 @@ internal static class AuditRetention
 {
     /// <summary>
     /// Upper bound for a finite retention. Values above this (and null / non-positive) are treated as
-    /// "keep forever" — both as the intended meaning and to avoid <see cref="TimeSpan.FromDays"/> overflow
+    /// "keep forever" — both as the intended meaning and to avoid <see cref="TimeSpan.FromDays(double)"/> overflow
     /// (~10.7M days). ~10,000 years is comfortably below that ceiling.
     /// </summary>
     public const int MaxRetentionDays = 3_650_000;

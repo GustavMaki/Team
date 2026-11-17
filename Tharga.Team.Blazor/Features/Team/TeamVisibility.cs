@@ -43,6 +43,8 @@ internal static class TeamVisibility
     /// The access level a team has actually consented to grant, or null when it has consented to no
     /// roles — visible, but no access — regardless of any level stored alongside.
     /// </summary>
+    /// <param name="consentedRoles">The global roles the team has consented to grant access to; none or empty means it has consented to nothing.</param>
+    /// <param name="consentAccessLevel">The level stored alongside the consent, or <c>null</c> when it carries none of its own.</param>
     /// <param name="defaultAccessLevel">
     /// The host's configured <c>Consent.AccessLevel</c>, granted when the consent carries no level of its
     /// own. Passed in rather than assumed, because it is what <c>TeamMembershipClaimsBuilder</c> actually
