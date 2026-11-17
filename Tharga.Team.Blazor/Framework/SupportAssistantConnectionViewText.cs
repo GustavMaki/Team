@@ -78,12 +78,36 @@ public static class SupportAssistantConnectionViewText
     /// <summary>When the reader may not change the team's assistant.</summary>
     public static readonly TextKey NotPermitted = new("team.support.assistant.connection.notPermitted", "You cannot change this team's AI assistant.");
 
+    /// <summary>The heading of the frame holding the team's own providers.</summary>
+    public static readonly TextKey OwnProviderFrame = new("team.support.assistant.connection.ownProvider", "The team's own provider");
+
+    /// <summary>In the platform's frame when the platform offers no model.</summary>
+    public static readonly TextKey PlatformOffersNone = new("team.support.assistant.connection.platformOffersNone", "The platform offers no AI model right now. Choose a provider of the team's own, or turn the assistant off.");
+
+    /// <summary>On a platform model's card. <c>{0}</c> is the provider's name.</summary>
+    public static readonly TextKey ModelProvider = new("team.support.assistant.connection.model.provider", "Provider: {0}");
+
+    /// <summary>On a platform model's card. <c>{0}</c> is where the model processes what it is asked.</summary>
+    public static readonly TextKey ModelProcessedIn = new("team.support.assistant.connection.model.processedIn", "Processed in {0}");
+
+    /// <summary>On a platform model's card. <c>{0}</c> is where the conversations are kept.</summary>
+    public static readonly TextKey ModelStoredIn = new("team.support.assistant.connection.model.storedIn", "Stored in {0}");
+
+    /// <summary>A badge on the model a team gets when it has not chosen one.</summary>
+    public static readonly TextKey ModelDefault = new("team.support.assistant.connection.model.default", "Default");
+
+    /// <summary>The link under the cards to the chosen model's data processing agreement.</summary>
+    public static readonly TextKey Agreement = new("team.support.assistant.connection.agreement", "Data processing agreement");
+
+    /// <summary>The link in a provider's form to the provider's own site.</summary>
+    public static readonly TextKey ProviderSite = new("team.support.assistant.connection.providerSite", "The provider's website");
+
     /// <summary>Every key the component renders, for building its <see cref="TextSet"/>.</summary>
     public static readonly TextKey[] All =
     [
         Title, Explanation, ChangedBy, KindPlatform, KindPlatformNamed, KindNeurolito, KindAnthropic, KindOpenAI, KindOllama, KindLlamaCpp, KindOff,
         Address, ApiKey, ApiKeyPlaceholder, ApiKeyOptional, ApiKeyStored, LoadModels, Model, Test, TestReply, Save, Saved, Failed, SelectTeam,
-        NotPermitted
+        NotPermitted, OwnProviderFrame, PlatformOffersNone, ModelProvider, ModelProcessedIn, ModelStoredIn, ModelDefault, Agreement, ProviderSite
     ];
 
     /// <summary>The name of a connection kind.</summary>
