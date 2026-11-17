@@ -1,0 +1,61 @@
+@using Microsoft.Extensions.Options
+@inject ITeamLifecycleService TeamLifecycleService
+@inject NavigationManager NavigationManager
+@inject IOptions<ThargaBlazorOptions> BlazorOptions
+@inject IThargaTextProvider TextProvider
+
+@* The "Create new Team" entry point on its own, so a host that shows one team can keep it beside that team. It does what the
+   one in TeamComponent does: CreateTeamRequested first, then ThargaBlazorOptions.CreateTeamPath, then a built-in create.
+   Shown only where the host allows team creation. *@
+
+@if (_allowed)
+{
+    <RadzenButton Icon="add" Text="@(Text ?? _text[TeamComponentText.CreateTeam])" Click="@CreateAsync" Disabled="@Disabled" />
+}
+
+@code {
+    /// <summary>
+    /// Optional callback invoked when the button is activated. When set, it takes precedence over
+    /// <see cref="ThargaBlazorOptions.CreateTeamPath"/> and the built-in create, letting a host launch its own onboarding flow.
+    /// When unset, the button navigates to <c>CreateTeamPath</c> (if configured), otherwise it performs the built-in
+    /// <see cref="ITeamLifecycleService.CreateTeamAsync"/>.
+    /// </summary>
+    [Parameter] public EventCallback CreateTeamRequested { get; set; }
+
+    /// <summary>Raised after the built-in create has made a team, so the host can read its teams again.</summary>
+    [Parameter] public EventCallback Created { get; set; }
+
+    /// <summary>The button's text; "Create new Team", localizable, when not set.</summary>
+    [Parameter] public string Text { get; set; }
+
+    /// <summary>Whether the button is disabled.</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    private TextSet _text = TextSet.Empty;
+    private bool _allowed;
+    private string _createTeamPath;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _text = await TextProvider.ResolveAsync(TeamComponentText.All);
+        _allowed = BlazorOptions.Value.AllowTeamCreation;
+        _createTeamPath = BlazorOptions.Value.CreateTeamPath;
+    }
+
+    private async Task CreateAsync()
+    {
+        switch (CreateTeamActionResolver.Resolve(CreateTeamRequested.HasDelegate, _createTeamPath))
+        {
+            case CreateTeamAction.Callback:
+                await CreateTeamRequested.InvokeAsync();
+                return;
+            case CreateTeamAction.Navigate:
+                NavigationManager.NavigateTo(_createTeamPath);
+                return;
+            default:
+                await TeamLifecycleService.CreateTeamAsync();
+                await Created.InvokeAsync();
+                return;
+        }
+    }
+}

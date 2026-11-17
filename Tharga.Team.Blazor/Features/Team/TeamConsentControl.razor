@@ -1,0 +1,61 @@
+@typeparam TMember where TMember : class, Tharga.Team.ITeamMember
+@inject ITeamManagementService TeamManagementService
+
+@* The consent selector: editable where consent can be changed, read-only for a caller consent concerns, and absent for
+   everyone else. Read-only rather than a badge so the level sits under the same label in both cases: "Consent access for
+   Developer: No access" says what is being set; a bare "No access" did not. *@
+
+@if (ViewContext != null && Team != null && ViewContext.ShowConsentToggle && ViewContext.CanEditConsent(Team))
+{
+    <RadzenStack Orientation="Orientation.Vertical" Gap="0.15rem" AlignItems="AlignItems.Start">
+        @if (ShowLabel)
+        {
+            <RadzenLabel Text="@ConsentLabel" Style="font-size: 0.85em; opacity: 0.75;" />
+        }
+        <RadzenDropDown TValue="AccessLevel?"
+                        Value="@ViewContext.ConsentOf(Team)"
+                        Data="@ViewContext.ConsentLevels"
+                        AllowClear="true"
+                        Placeholder="@ViewContext.Text[TeamComponentText.NoAccess]"
+                        Change="@(async args => await SetConsentAsync((AccessLevel?)args))"
+                        Style="width: 100%;" />
+    </RadzenStack>
+}
+else if (ViewContext != null && Team != null && ViewContext.CanSeeConsent)
+{
+    <RadzenStack Orientation="Orientation.Vertical" Gap="0.15rem" AlignItems="AlignItems.Start">
+        @if (ShowLabel)
+        {
+            <RadzenLabel Text="@ConsentLabel" Style="font-size: 0.85em; opacity: 0.75;" />
+        }
+        <RadzenDropDown TValue="AccessLevel?"
+                        Value="@ViewContext.ConsentOf(Team)"
+                        Data="@ViewContext.ConsentLevels"
+                        ReadOnly="true"
+                        Placeholder="@ViewContext.Text[TeamComponentText.NoAccess]"
+                        Style="width: 100%;" />
+    </RadzenStack>
+}
+
+@code {
+    /// <summary>The team whose consent is shown.</summary>
+    [Parameter, EditorRequired] public ITeam<TMember> Team { get; set; }
+
+    /// <summary>What the team components share.</summary>
+    [Parameter, EditorRequired] public TeamViewContext ViewContext { get; set; }
+
+    /// <summary>Whether the label ("Consent access for Developer") is drawn above the selector.</summary>
+    [Parameter] public bool ShowLabel { get; set; } = true;
+
+    /// <summary>Raised after consent was changed, so the teams are read again.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private string ConsentLabel => ViewContext.Text.Format(TeamComponentText.ConsentAccessFor, string.Join(", ", ViewContext.ConsentRoles));
+
+    private async Task SetConsentAsync(AccessLevel? level)
+    {
+        var roles = level.HasValue ? ViewContext.ConsentRoles : Array.Empty<string>();
+        await TeamManagementService.SetTeamConsentAsync(Team.Key, roles, level);
+        await Changed.InvokeAsync();
+    }
+}

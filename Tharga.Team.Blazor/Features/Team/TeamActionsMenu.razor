@@ -1,0 +1,275 @@
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.Extensions.Options
+@using Microsoft.JSInterop
+@using Tharga.Toolkit
+@typeparam TMember where TMember : class, Tharga.Team.ITeamMember
+@inject ITeamManagementService TeamManagementService
+@inject ITeamDirectoryService TeamDirectoryService
+@inject ITeamAccessRequestService AccessRequestService
+@inject IJSRuntime Js
+@inject DialogService DialogService
+@inject NavigationManager NavigationManager
+@inject NotificationService NotificationService
+@inject IOptions<ThargaBlazorOptions> BlazorOptions
+@inject IServiceProvider ServiceProvider
+
+@* The team-level actions as a button or a split button: invite, icon, rename, transfer, request access, leave, delete.
+   The first available action is the primary one, with "Invite user" preferred. Shared by every layout of the team list
+   and by TeamMembersView, so an action cannot land in one and not the other. *@
+
+@if (ViewContext != null && Team != null)
+{
+    var actions = Actions();
+    if (actions.Count == 1)
+    {
+        <RadzenButton Text="@actions[0].Text" Icon="@actions[0].Icon" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                      Click="@(() => RunAsync(actions[0].Value))" />
+    }
+    else if (actions.Count > 1)
+    {
+        <RadzenSplitButton Text="@actions[0].Text" Icon="@actions[0].Icon" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                           Click="@(item => OnActionAsync(item, actions[0].Value))">
+            <ChildContent>
+                @foreach (var action in actions.Skip(1))
+                {
+                    <RadzenSplitButtonItem Text="@action.Text" Value="@action.Value" Icon="@action.Icon" />
+                }
+            </ChildContent>
+        </RadzenSplitButton>
+    }
+}
+
+@code {
+    private const string IconAction = "icon";
+    private const string RenameAction = "rename";
+    private const string InviteAction = "invite";
+    private const string TransferAction = "transfer";
+    private const string DeleteAction = "delete";
+    private const string LeaveAction = "leave";
+    private const string RequestAccessAction = "request-access";
+    private const string WithdrawAccessAction = "withdraw-access";
+
+    /// <summary>The team the actions are for.</summary>
+    [Parameter, EditorRequired] public ITeam<TMember> Team { get; set; }
+
+    /// <summary>What the team components share.</summary>
+    [Parameter, EditorRequired] public TeamViewContext ViewContext { get; set; }
+
+    /// <summary>Raised after an action changed something, so the teams are read again.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private TextSet Text => ViewContext.Text;
+    private TextSet RequestText => ViewContext.RequestText;
+
+    /// <summary>The actions available on the team, in priority order.</summary>
+    private List<(string Value, string Text, string Icon)> Actions()
+    {
+        var actions = new List<(string, string, string)>();
+        if (ViewContext.CanManageMembersOn(Team)) actions.Add((InviteAction, Text[TeamComponentText.ActionInviteUser], "person_add"));
+        if (ViewContext.CanRenameTeam(Team))
+        {
+            actions.Add((IconAction, Text[TeamComponentText.ActionSetIcon], "image"));
+            actions.Add((RenameAction, Text[TeamComponentText.ActionRenameTeam], "edit"));
+        }
+        if (ViewContext.CanTransferOwnership(Team)) actions.Add((TransferAction, Text[TeamComponentText.ActionTransferOwnership], "swap_horiz"));
+        if (TeamAccessRequestGate.CanRequest(ViewContext.IsMemberOf(Team), ViewContext.CallerRoles, ViewContext.ConsentRoles))
+        {
+            var mine = TeamAccessRequestGate.PendingOn(ViewContext.MyAccessRequests, Team.Key);
+            actions.Add(mine == null
+                ? (RequestAccessAction, RequestText[TeamAccessRequestText.RequestAccess], "key")
+                : (WithdrawAccessAction, RequestText[TeamAccessRequestText.Withdraw], "undo"));
+        }
+        if (ViewContext.CanLeaveTeam(Team)) actions.Add((LeaveAction, Text[TeamComponentText.ActionLeaveTeam], "remove"));
+        if (ViewContext.CanDeleteTeam(Team)) actions.Add((DeleteAction, Text[TeamComponentText.ActionDeleteTeam], "delete"));
+        return actions;
+    }
+
+    private Task OnActionAsync(RadzenSplitButtonItem item, string defaultValue) => RunAsync(item?.Value ?? defaultValue);
+
+    private async Task RunAsync(string value)
+    {
+        switch (value)
+        {
+            case IconAction: await SetTeamIcon(); break;
+            case RenameAction: await RenameTeam(); break;
+            case InviteAction: await AddUser(); break;
+            case TransferAction: await TransferOwnership(); break;
+            case LeaveAction: await LeaveTeam(); break;
+            case DeleteAction: await DeleteTeam(); break;
+            case RequestAccessAction: await RequestTeamAccessAsync(); break;
+            case WithdrawAccessAction: await WithdrawTeamAccessAsync(); break;
+        }
+    }
+
+    private async Task RenameTeam()
+    {
+        var result = await DialogService.OpenAsync<TeamDialog<TMember>>(
+            Text.Format(TeamComponentText.RenameTitle, Team.Name),
+            new Dictionary<string, object> { { "TeamKey", Team.Key }, { "Name", Team.Name } },
+            new DialogOptions { Resizable = true, Draggable = true });
+
+        if (result == true) await Changed.InvokeAsync();
+    }
+
+    private async Task SetTeamIcon()
+    {
+        var result = await DialogService.OpenAsync<TeamIconDialog>(
+            Text.Format(TeamComponentText.IconTitle, Team.Name),
+            new Dictionary<string, object>
+            {
+                { nameof(TeamIconDialog.TeamKey), Team.Key },
+                { nameof(TeamIconDialog.HasIcon), !string.IsNullOrEmpty(Team.Icon) }
+            },
+            new DialogOptions { Width = "480px" });
+
+        if (result is true) await Changed.InvokeAsync();
+    }
+
+    private async Task AddUser()
+    {
+        var team = Team;
+        var result = await DialogService.OpenAsync<InviteUserDialog>(
+            Text[TeamComponentText.InviteUserTitle],
+            new Dictionary<string, object> { { "TeamKey", team.Key }, { "TeamName", team.Name } },
+            new DialogOptions { Resizable = true, Draggable = true });
+
+        if (result is InviteUserDialog.InviteResult inviteResult && inviteResult.Success)
+        {
+            await Changed.InvokeAsync();
+
+            var updatedTeam = await TeamManagementService.GetTeamAsync<TMember>(team.Key);
+            var invitedMember = updatedTeam?.Members
+                .FirstOrDefault(m => m.Invitation != null && m.Name == inviteResult.Name);
+
+            if (invitedMember?.Invitation != null)
+            {
+                var link = TeamInviteLink.Build(NavigationManager.BaseUri, BlazorOptions.Value.InvitePath, invitedMember.Invitation.InviteKey);
+
+                var emailSender = ServiceProvider.GetService<ITeamEmailSender>();
+                if (emailSender != null && !string.IsNullOrWhiteSpace(inviteResult.Email))
+                {
+                    try
+                    {
+                        await emailSender.SendInviteAsync(new TeamInviteMail
+                        {
+                            RecipientEmail = inviteResult.Email,
+                            RecipientName = inviteResult.Name,
+                            InviteLink = link,
+                            TeamKey = updatedTeam.Key,
+                            TeamName = team.Name
+                        });
+                        NotificationService.Notify(NotificationSeverity.Success,
+                            Text[TeamComponentText.InvitationSent], Text.Format(TeamComponentText.EmailSentTo, inviteResult.Email));
+                    }
+                    catch (Exception ex)
+                    {
+                        NotificationService.Notify(NotificationSeverity.Warning,
+                            Text[TeamComponentText.EmailFailed], Text.Format(TeamComponentText.CouldNotSendEmail, ex.Message));
+                    }
+                }
+
+                if (await Js.TryCopyToClipboardAsync(link))
+                {
+                    NotificationService.Notify(new NotificationMessage
+                    {
+                        Summary = Text[TeamComponentText.InviteLinkCopied]
+                    });
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Leaving goes through <see cref="ITeamDirectoryService.LeaveTeamAsync"/>, not <c>RemoveMemberAsync</c>: that one needs
+    /// <c>member:manage</c>, which an ordinary member does not hold, so this action used to offer itself and then fail.
+    /// </summary>
+    private async Task LeaveTeam()
+    {
+        var response = await DialogService.Confirm(Text.Format(TeamComponentText.ConfirmLeaveTeam, Team.Name));
+        if (response != true) return;
+
+        await TeamDirectoryService.LeaveTeamAsync(Team.Key);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task TransferOwnership()
+    {
+        var team = Team;
+        var eligibleMembers = team.Members
+            .Where(x => x.Key != ViewContext.User.Key && x.State == MembershipState.Member)
+            .ToArray();
+
+        if (eligibleMembers.Length == 0)
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, Text[TeamComponentText.NoEligibleMembers], Text[TeamComponentText.NoEligibleMembersDetail]);
+            return;
+        }
+
+        var memberOptions = eligibleMembers.Select(m =>
+        {
+            var user = ViewContext.Users.FirstOrDefault(u => u.Key == m.Key);
+            var display = user?.EMail ?? m.Name ?? m.Key;
+            return new { m.Key, Display = display };
+        }).ToArray();
+
+        string selectedKey = memberOptions.First().Key;
+
+        var result = await DialogService.OpenAsync(Text[TeamComponentText.TransferOwnershipTitle], ds =>
+            @<RadzenStack Gap="1rem">
+                <RadzenText>Select the new owner of team '@team.Name':</RadzenText>
+                <RadzenDropDown TValue="string" @bind-Value="selectedKey"
+                                Data="@memberOptions"
+                                TextProperty="Display"
+                                ValueProperty="Key" />
+                <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.Right" Gap="0.5rem">
+                    <RadzenButton Text="@Text[TeamComponentText.Transfer]" ButtonStyle="ButtonStyle.Warning" Click="@(_ => ds.Close(true))" />
+                    <RadzenButton Text="@Text[TeamComponentText.Cancel]" ButtonStyle="ButtonStyle.Light" Click="@(_ => ds.Close(false))" />
+                </RadzenStack>
+            </RadzenStack>,
+            new DialogOptions { Width = "400px" });
+
+        if (result is not true) return;
+
+        await TeamManagementService.TransferOwnershipAsync(team.Key, selectedKey);
+        await Changed.InvokeAsync();
+        NotificationService.Notify(NotificationSeverity.Success, Text[TeamComponentText.OwnershipTransferred]);
+    }
+
+    private async Task DeleteTeam()
+    {
+        var response = await DialogService.Confirm(Text.Format(TeamComponentText.ConfirmDeleteTeam, Team.Name));
+        if (response != true) return;
+
+        await TeamManagementService.DeleteTeamAsync(Team.Key);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RequestTeamAccessAsync()
+    {
+        var sent = await DialogService.OpenAsync<TeamAccessRequestDialog>(RequestText[TeamAccessRequestText.RequestAccess],
+            new Dictionary<string, object> { [nameof(TeamAccessRequestDialog.TeamKey)] = Team.Key },
+            new DialogOptions { Width = "520px" });
+
+        if (sent is not true) return;
+
+        NotificationService.Notify(NotificationSeverity.Success, RequestText[TeamAccessRequestText.Sent]);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task WithdrawTeamAccessAsync()
+    {
+        var mine = TeamAccessRequestGate.PendingOn(ViewContext.MyAccessRequests, Team.Key);
+        if (mine == null) return;
+
+        try
+        {
+            await AccessRequestService.CancelTeamAccessRequestAsync(Team.Key, mine.Id);
+            NotificationService.Notify(NotificationSeverity.Success, RequestText[TeamAccessRequestText.Withdrawn]);
+            await Changed.InvokeAsync();
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            NotificationService.Notify(NotificationSeverity.Error, RequestText[TeamAccessRequestText.Failed], e.Message);
+        }
+    }
+}

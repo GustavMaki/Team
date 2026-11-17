@@ -2611,7 +2611,26 @@ for a major version. It is presentation only: the component still loads every te
 a caller may see or do is unchanged. The switch appears only while there is another team to switch to, the
 choice is not remembered, and a caller with no selected team sees every team, since narrowing would leave
 an empty page. A list narrowed to one team is drawn as a card, whatever `TeamLayout` threshold applies to
-the full list.
+the full list. To leave the switch out, so the page stays about the selected team, set
+`ShowAllTeamsSwitch="false"` (default true).
+
+**A page for one team.** A host that wants a members page of its own, without the list around it, uses
+`<TeamMembersView TMember="MyMember" />` and `<CreateTeamButton />`. `TeamMembersView` is what `TeamComponent`
+draws for each team: the team's members with their columns and actions, the pending access requests, and above
+them the team's consent selector and actions (invite, icon, rename, transfer, request access, leave, delete).
+It shows the selected team, or the team named by `TeamKey`; it takes the same member parameters as
+`TeamComponent` (`ShowRoles`, `ShowScopeOverrides`, `ShowScopeTooltip`, `ShowAuditLogButton`,
+`EnableMemberNameEdit`, `OnMemberNameChanged`, `MemberColumns`, `MemberActionsTemplate`, `MemberActionItems`,
+`MemberActionInvoked`), and `ShowHeader="false"` leaves out the consent selector and the actions. What a caller
+may see and do is decided exactly as in the list, so a team that is not among the caller's own shows nothing.
+`CreateTeamButton` is the list's *Create new Team* button on its own: it honours `CreateTeamRequested`, then
+`CreateTeamPath`, then creates a team, and is shown only where `AllowTeamCreation` is on; `Created` is raised
+after the built-in create, and `Text` replaces its label.
+
+```razor
+<TeamMembersView TMember="MyMember" ShowRoles="true" />
+<CreateTeamButton CreateTeamRequested="LaunchOnboardingAsync" />
+```
 
 **Only the team name sorts and filters.** Every other column is derived — your level comes from your
 membership or the team's consent — and a sort control that silently does nothing is worse than no
@@ -3150,7 +3169,9 @@ the built-ins. This is only about the two the toolkit renders.
 | `<AccessSimulationIndicator>` | none — renders only while a run-as simulation is active |
 | `<TeamNotificationMenu>` | none — optional top-bar bell; the badge counts [access requests](access-requests.md) awaiting the caller's decision |
 | `<TeamAccessRequestButton>` | `TeamKey` (required), `ButtonStyle`, `Size`, `Changed` — places *Request access* / *Withdraw* anywhere; renders nothing for a caller who cannot ask |
-| `<TeamComponent>` | `ShowScopeTooltip` (default true), `ShowScopeOverrides`, `ShowRoles`, `CreateTeamRequested` (intercept the "Create new Team" button), plus the member-row hooks below |
+| `<TeamComponent>` | `ShowScopeTooltip` (default true), `ShowScopeOverrides`, `ShowRoles`, `ShowSelectedTeamOnly`, `ShowAllTeamsSwitch` (default true), `CreateTeamRequested` (intercept the "Create new Team" button), plus the member-row hooks below |
+| `<TeamMembersView>` | One team's members, consent and actions: `TeamKey` (default: the selected team), `ShowHeader` (default true), and the member parameters of `TeamComponent` |
+| `<CreateTeamButton>` | The "Create new Team" button on its own: `CreateTeamRequested`, `Created`, `Text`, `Disabled`; honours `CreateTeamPath` and `AllowTeamCreation` |
 | `<ApiKeyView>` | `ShowScopeTooltip` (true), `ShowScopeOverrides`, `ShowRoles`, `ShowLastUsed` (true), `ShowExpiryDatePicker`, `ShowTags` (`bool?`, null=auto), `ChipTagKeys`, `ShowAuditLogButton`, `ShowPrivateKeys` (`Mine`), `AllowPrivilegedAccess` |
 | `<SystemApiKeyView>` | `ShowScopeTooltip` (true), `ShowScopeOverrides` (true), `ShowLastUsed` (true), `ShowExpiryDatePicker`, `ShowAuditLogButton`, `ShowPrivateKeys` (`Mine`) |
 

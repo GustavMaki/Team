@@ -8,7 +8,7 @@ namespace Tharga.Team.Blazor.Tests;
 public class ScopeVisibilityWiringTests
 {
     [Theory]
-    [InlineData("Features/Team/TeamComponent.razor")]
+    [InlineData("Features/Team/TeamViewContext.cs")]
     [InlineData("Features/Api/ApiKeyView.razor")]
     [InlineData("Features/Roles/TenantRoleManager.razor")]
     [InlineData("Features/Scopes/ScopeView.razor")]
