@@ -28,8 +28,9 @@ namespace Tharga.Team.Email;
 /// DNS unless another is given, so <see cref="InboundMail.SenderVerified"/> means the same on every read path.
 /// </para>
 /// </remarks>
-internal sealed class MailClient(IOptions<MailOptions> options, ILogger<MailClient> logger = null, DkimSenderVerifier senderVerifier = null) : IMailClient
+internal sealed class MailClient(IOptions<MailOptions> options, ILogger<MailClient> logger = null, DkimSenderVerifier senderVerifier = null, MailReadHealth health = null) : IMailClient
 {
+    private readonly MailReadHealth _health = health ?? MailReadHealth.Shared;
     /// <summary>How many messages one poll will take, so a large backlog cannot stall a deployment.</summary>
     private const int MaxMessagesPerFetch = 100;
 
@@ -76,13 +77,27 @@ internal sealed class MailClient(IOptions<MailOptions> options, ILogger<MailClie
     {
         if (!CanRead) return MailFetchResult.Empty(position);
 
+        var folderName = _options.Folder ?? "INBOX";
+        var key = MailReadHealth.KeyOf(_options.Imap, folderName);
+        var credential = MailReadHealth.CredentialOf(_options.Imap);
+
+        // Every row from a read names the mailbox. The user is the mailbox's own sign-in, which is what tells two mailboxes on one host apart.
+        using var scope = logger?.BeginScope(new Dictionary<string, object> { ["MailHost"] = _options.Imap.Host, ["MailUser"] = _options.Imap.UserName, ["MailFolder"] = folderName });
+
+        if (_health.DeferredUntil(key, credential) is { } until)
+        {
+            logger?.LogDebug("The mailbox is not tried until {RetryNotBefore:u}, after the server refused the sign-in.", until);
+
+            return MailFetchResult.NotTried(position, $"Not tried until {until:u}: the server refused the sign-in, and the wait before the next attempt is not over.");
+        }
+
         try
         {
             using var client = new ImapClient { Timeout = (int)_options.Timeout.TotalMilliseconds };
 
             await ConnectAsync(client, _options.Imap, cancellationToken);
 
-            var folder = await client.GetFolderAsync(_options.Folder ?? "INBOX", cancellationToken);
+            var folder = await client.GetFolderAsync(folderName, cancellationToken);
 
             // ReadOnly is the guarantee, not merely the intent: opening read-write is what lets a fetch set
             // \Seen as a side effect, which would hide the mail from the other application reading this
@@ -107,11 +122,40 @@ internal sealed class MailClient(IOptions<MailOptions> options, ILogger<MailClie
 
             await client.DisconnectAsync(true, cancellationToken);
 
+            if (_health.Succeeded(key, out var failedBefore))
+                logger?.LogInformation("The mailbox could be read again, after {Failures} failed reads in a row.", failedBefore);
+
             return new MailFetchResult(new MailFetchPosition(folder.UidValidity, highest), mails, rescanned);
         }
         catch (Exception e)
         {
-            logger?.LogError(e, "The mailbox could not be read.");
+            var kind = MailReadHealth.Classify(e, cancellationToken);
+
+            // Asked to stop is not a failure of the mailbox.
+            if (kind == MailReadFailureKind.Cancelled)
+            {
+                logger?.LogDebug("The read of the mailbox was stopped.");
+
+                return MailFetchResult.Failed(position, e.Message);
+            }
+
+            var outcome = _health.Failed(key, credential, kind);
+
+            switch (kind)
+            {
+                case MailReadFailureKind.Refused:
+                    logger?.Log(outcome.Level, e, "The mailbox refused the sign-in ({Failures} in a row). It is not tried again until {RetryNotBefore:u}.", outcome.Consecutive, outcome.RetryNotBefore);
+                    break;
+                case MailReadFailureKind.Transient when outcome.Level == LogLevel.Error:
+                    logger?.Log(outcome.Level, e, "The mailbox could not be read {Failures} times in a row.", outcome.Consecutive);
+                    break;
+                case MailReadFailureKind.Transient:
+                    logger?.Log(outcome.Level, e, "The mailbox could not be read ({Failures} in a row), and is read again at the next poll.", outcome.Consecutive);
+                    break;
+                default:
+                    logger?.Log(outcome.Level, e, "The mailbox could not be read.");
+                    break;
+            }
 
             return MailFetchResult.Failed(position, e.Message);
         }

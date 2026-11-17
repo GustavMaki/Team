@@ -165,6 +165,13 @@ internal sealed class SupportMailPoller(
         // With the raw message, so each mail can be kept as it arrived (Tharga/Team#499); a client that cannot supply it reads as before.
         var result = await client.FetchAsync(new MailFetchPosition(reader.Position.UidValidity, reader.Position.LastUid), true, cancellationToken);
 
+        if (result.Deferred)
+        {
+            // Not tried: the refused sign-in was reported when it happened, and is not reported again at every poll.
+            logger?.LogDebug("The support mailbox {Mailbox} was not read: {Error}", reader.Mailbox.Name, result.Error);
+            return 0;
+        }
+
         if (result.Error != null)
         {
             logger?.LogWarning("The support mailbox {Mailbox} could not be read: {Error} The other mailboxes are read as usual, and this one is tried again at its next poll.", reader.Mailbox.Name, result.Error);

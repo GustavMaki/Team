@@ -124,6 +124,15 @@ public readonly record struct MailFetchResult(
 
     /// <summary>The mailbox could not be read, for the stated reason, and the position is unchanged.</summary>
     public static MailFetchResult Failed(MailFetchPosition position, string error) => new(position, [], false, error);
+
+    /// <summary>
+    /// True when the mailbox was not tried at all, because the server has been refusing its sign-in and the wait before the next attempt is
+    /// not over. <see cref="Error"/> says so. A caller that reports failed reads can leave this one quiet: the refusal was reported when it happened.
+    /// </summary>
+    public bool Deferred { get; init; }
+
+    /// <summary>The mailbox was not tried, for the stated reason, and the position is unchanged.</summary>
+    public static MailFetchResult NotTried(MailFetchPosition position, string error) => new(position, [], false, error) { Deferred = true };
 }
 
 /// <summary>

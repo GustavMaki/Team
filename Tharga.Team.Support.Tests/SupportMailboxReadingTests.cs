@@ -102,6 +102,22 @@ public class SupportMailboxReadingTests
         await _positions.DidNotReceive().SetAsync(SupportMailPoller.PositionKey(new SupportMailbox(Hosted, hostedOptions)), Arg.Any<SupportMailPosition>(), Arg.Any<CancellationToken>());
     }
 
+    /// <summary>A mailbox whose sign-in the server refused is not tried at every poll, and the poller does not report each skipped poll (Tharga/Team#510).</summary>
+    [Fact]
+    public async Task AMailboxNotTriedBecauseItsSignInWasRefused_IsNotReportedAtEveryPoll()
+    {
+        var own = Client(uidValidity: 7, mails: Mail("own-1@example.org", OwnAddress));
+        var hosted = Substitute.For<IMailClient>();
+        hosted.CanRead.Returns(true);
+        hosted.FetchAsync(Arg.Any<MailFetchPosition>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(call => MailFetchResult.NotTried(call.Arg<MailFetchPosition>(), "Not tried until 2026-11-17 10:00:00Z: the server refused the sign-in."));
+        var poller = Build(own, hosted);
+
+        Assert.Equal(1, await poller.PollAsync(CancellationToken.None));
+
+        Assert.DoesNotContain(_log.Entries, x => x.Level >= LogLevel.Warning);
+    }
+
     /// <summary>A customer who wrote to both addresses sent one mail with one Message-ID, and it opens one case.</summary>
     [Fact]
     public async Task TheSameMessageInBothMailboxes_OpensOneCase()
