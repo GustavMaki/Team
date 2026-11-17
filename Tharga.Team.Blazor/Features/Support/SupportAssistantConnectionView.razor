@@ -6,7 +6,8 @@
 
 @* What the support assistant answers a team with: the platform's model, the team's own provider, or nothing. The
    service requires assistant:manage on the team, so a reader without it is told rather than shown a form that fails.
-   The key is write-only: it is typed, sent, and cleared; nothing here ever reads one back. *@
+   The key is write-only: it is typed, sent, and cleared; nothing here ever reads one back.
+   The choice is drawn as cards: each is a button with role="radio" in one radiogroup, so exactly one is checked. *@
 
 <RadzenCard>
     @if (!_ready)
@@ -38,51 +39,145 @@
                 </RadzenText>
             }
 
-            <RadzenRadioButtonList TValue="SupportAiConnectionKind" Value="@_kind" Change="OnKindChanged" Orientation="Orientation.Vertical" Disabled="_busy" data-kinds>
-                <Items>
-                    @foreach (var kind in _choices.Kinds)
-                    {
-                        <RadzenRadioButtonListItem Text="@KindLabel(kind)" Value="@kind" />
-                    }
-                </Items>
-            </RadzenRadioButtonList>
-
-            @if (IsProvider(_kind))
-            {
-                <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" data-provider="@_kind">
-                    <RadzenFormField Text="@_text[SupportAssistantConnectionViewText.Address]" Variant="Variant.Outlined">
-                        <RadzenTextBox @bind-Value="_address" Disabled="_busy" data-address />
-                    </RadzenFormField>
-                    @* The hint is helper text, not a placeholder: inside a form field the placeholder is the floating label's. *@
-                    <RadzenFormField Text="@_text[SupportAssistantConnectionViewText.ApiKey]" Variant="Variant.Outlined">
-                        <ChildContent>
-                            <RadzenPassword Value="@ShownKey" ValueChanged="@((string value) => KeyTyped(value))" Disabled="_busy" AutoCompleteType="AutoCompleteType.Off" data-key />
-                        </ChildContent>
-                        <Helper>
-                            <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0" data-key-hint>
-                                @(KeepsStoredKey ? _text[SupportAssistantConnectionViewText.ApiKeyStored] : _text[RequiresApiKey ? SupportAssistantConnectionViewText.ApiKeyPlaceholder : SupportAssistantConnectionViewText.ApiKeyOptional])
-                            </RadzenText>
-                        </Helper>
-                    </RadzenFormField>
-                    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.End" Wrap="FlexWrap.Wrap">
-                        <RadzenButton Text="@_text[SupportAssistantConnectionViewText.LoadModels]" Icon="list" ButtonStyle="ButtonStyle.Light" Click="LoadModelsAsync" Disabled="_busy" data-load-models />
-                        @if (_models.Length > 0)
+            <div role="radiogroup" aria-label="@_text[SupportAssistantConnectionViewText.Title]" class="assistant-choice" data-kinds>
+                @if (ShowsPlatformFrame)
+                {
+                    <div class="assistant-frame @(_kind == SupportAiConnectionKind.Platform ? "assistant-frame--on" : null)" data-frame="platform">
+                        <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-m-0">@_text[SupportAssistantConnectionViewText.KindPlatform]</RadzenText>
+                        @if (_choices.PlatformModels.Length > 0)
                         {
-                            <RadzenFormField Text="@_text[SupportAssistantConnectionViewText.Model]" Variant="Variant.Outlined">
-                                <RadzenDropDown TValue="string" Data="_models" TextProperty="@nameof(SupportAiModel.DisplayName)" ValueProperty="@nameof(SupportAiModel.Id)"
-                                                @bind-Value="_model" Disabled="_busy" Style="min-width: 16rem;" data-models />
-                            </RadzenFormField>
+                            <div class="assistant-cards">
+                                @foreach (var model in _choices.PlatformModels)
+                                {
+                                    var on = _kind == SupportAiConnectionKind.Platform && _platformModelId == model.Id;
+                                    <button type="button" role="radio" aria-checked="@(on ? "true" : "false")" disabled="@_busy" data-model="@model.Id"
+                                            class="assistant-card @(on ? "assistant-card--on" : null)" @onclick="() => ChoosePlatformModel(model.Id)">
+                                        <span class="assistant-mark assistant-mark--platform" aria-hidden="true"></span>
+                                        <span class="assistant-card__body">
+                                            <span class="assistant-card__title">
+                                                @model.DisplayName
+                                                @if (model.IsDefault)
+                                                {
+                                                    <span class="assistant-badge" data-default>@_text[SupportAssistantConnectionViewText.ModelDefault]</span>
+                                                }
+                                            </span>
+                                            @if (!string.IsNullOrWhiteSpace(model.Provider))
+                                            {
+                                                <span class="assistant-card__line" data-provider-name>@_text.Format(SupportAssistantConnectionViewText.ModelProvider, model.Provider)</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(model.ProcessedIn))
+                                            {
+                                                <span class="assistant-card__line" data-processed>@_text.Format(SupportAssistantConnectionViewText.ModelProcessedIn, model.ProcessedIn)</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(model.StoredIn))
+                                            {
+                                                <span class="assistant-card__line" data-stored>@_text.Format(SupportAssistantConnectionViewText.ModelStoredIn, model.StoredIn)</span>
+                                            }
+                                        </span>
+                                    </button>
+                                }
+                            </div>
+                            @if (ChosenAgreement is { } agreement)
+                            {
+                                <a href="@agreement" target="_blank" rel="noopener noreferrer" data-agreement>@_text[SupportAssistantConnectionViewText.Agreement]</a>
+                            }
                         }
-                    </RadzenStack>
-                    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
-                        <RadzenButton Text="@_text[SupportAssistantConnectionViewText.Test]" Icon="science" ButtonStyle="ButtonStyle.Light" Click="TestAsync" Disabled="@(_busy || _model == null)" data-test />
-                        <RadzenButton Text="@_text[SupportAssistantConnectionViewText.Save]" Icon="save" Click="SaveAsync" Disabled="@(_busy || _model == null)" data-save />
-                    </RadzenStack>
-                </RadzenStack>
-            }
-            else
+                        else if (_choices.Kinds.Contains(SupportAiConnectionKind.Platform))
+                        {
+                            @* No catalogue: the platform has the one model its client reports, as before. *@
+                            <div class="assistant-cards">
+                                <button type="button" role="radio" aria-checked="@(_kind == SupportAiConnectionKind.Platform ? "true" : "false")" disabled="@_busy" data-kind="@SupportAiConnectionKind.Platform"
+                                        class="assistant-card @(_kind == SupportAiConnectionKind.Platform ? "assistant-card--on" : null)" @onclick="() => OnKindChanged(SupportAiConnectionKind.Platform)">
+                                    <span class="assistant-mark assistant-mark--platform" aria-hidden="true"></span>
+                                    <span class="assistant-card__body"><span class="assistant-card__title">@KindLabel(SupportAiConnectionKind.Platform)</span></span>
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <RadzenAlert AlertStyle="AlertStyle.Warning" ShowIcon="true" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false" data-platform-none>
+                                @_text[SupportAssistantConnectionViewText.PlatformOffersNone]
+                            </RadzenAlert>
+                        }
+                    </div>
+                }
+
+                @if (_choices.Kinds.Any(IsProvider))
+                {
+                    <div class="assistant-frame @(IsProvider(_kind) ? "assistant-frame--on" : null)" data-frame="own">
+                        <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-m-0">@_text[SupportAssistantConnectionViewText.OwnProviderFrame]</RadzenText>
+                        <div class="assistant-cards">
+                            @foreach (var kind in _choices.Kinds.Where(IsProvider))
+                            {
+                                var on = _kind == kind;
+                                <button type="button" role="radio" aria-checked="@(on ? "true" : "false")" disabled="@_busy" data-kind="@kind"
+                                        class="assistant-card @(on ? "assistant-card--on" : null)" @onclick="() => OnKindChanged(kind)">
+                                    <span class="assistant-mark assistant-mark--@(SelfHosted(kind) ? "server" : "cloud")" aria-hidden="true"></span>
+                                    <span class="assistant-card__body"><span class="assistant-card__title">@KindLabel(kind)</span></span>
+                                </button>
+                            }
+                        </div>
+
+                        @if (IsProvider(_kind))
+                        {
+                            <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" data-provider="@_kind">
+                                @if (SiteOf(_kind) is { } site)
+                                {
+                                    <a href="@site" target="_blank" rel="noopener noreferrer" data-site>@_text[SupportAssistantConnectionViewText.ProviderSite]</a>
+                                }
+                                <RadzenFormField Text="@_text[SupportAssistantConnectionViewText.Address]" Variant="Variant.Outlined">
+                                    <RadzenTextBox @bind-Value="_address" Disabled="_busy" data-address />
+                                </RadzenFormField>
+                                @* The hint is helper text, not a placeholder: inside a form field the placeholder is the floating label's. *@
+                                <RadzenFormField Text="@_text[SupportAssistantConnectionViewText.ApiKey]" Variant="Variant.Outlined">
+                                    <ChildContent>
+                                        <RadzenPassword Value="@ShownKey" ValueChanged="@((string value) => KeyTyped(value))" Disabled="_busy" AutoCompleteType="AutoCompleteType.Off" data-key />
+                                    </ChildContent>
+                                    <Helper>
+                                        <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0" data-key-hint>
+                                            @(KeepsStoredKey ? _text[SupportAssistantConnectionViewText.ApiKeyStored] : _text[RequiresApiKey ? SupportAssistantConnectionViewText.ApiKeyPlaceholder : SupportAssistantConnectionViewText.ApiKeyOptional])
+                                        </RadzenText>
+                                    </Helper>
+                                </RadzenFormField>
+                                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.End" Wrap="FlexWrap.Wrap">
+                                    <RadzenButton Text="@_text[SupportAssistantConnectionViewText.LoadModels]" Icon="list" ButtonStyle="ButtonStyle.Light" Click="LoadModelsAsync" Disabled="_busy" data-load-models />
+                                    @if (_models.Length > 0)
+                                    {
+                                        <RadzenFormField Text="@_text[SupportAssistantConnectionViewText.Model]" Variant="Variant.Outlined">
+                                            <RadzenDropDown TValue="string" Data="_models" TextProperty="@nameof(SupportAiModel.DisplayName)" ValueProperty="@nameof(SupportAiModel.Id)"
+                                                            @bind-Value="_model" Disabled="_busy" Style="min-width: 16rem;" data-models />
+                                        </RadzenFormField>
+                                    }
+                                </RadzenStack>
+                                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center">
+                                    <RadzenButton Text="@_text[SupportAssistantConnectionViewText.Test]" Icon="science" ButtonStyle="ButtonStyle.Light" Click="TestAsync" Disabled="@(_busy || _model == null)" data-test />
+                                    <RadzenButton Text="@_text[SupportAssistantConnectionViewText.Save]" Icon="save" Click="SaveAsync" Disabled="@(_busy || _model == null)" data-save />
+                                    @if (_busy)
+                                    {
+                                        <RadzenProgressBarCircular ProgressBarStyle="ProgressBarStyle.Primary" Mode="ProgressBarMode.Indeterminate" Style="width: 20px; height: 20px;" ShowValue="false" data-busy />
+                                    }
+                                </RadzenStack>
+                            </RadzenStack>
+                        }
+                    </div>
+                }
+
+                <button type="button" role="radio" aria-checked="@(_kind == SupportAiConnectionKind.Off ? "true" : "false")" disabled="@_busy" data-kind="@SupportAiConnectionKind.Off"
+                        class="assistant-card assistant-card--off @(_kind == SupportAiConnectionKind.Off ? "assistant-card--on" : null)" @onclick="() => OnKindChanged(SupportAiConnectionKind.Off)">
+                    <span class="assistant-mark assistant-mark--off" aria-hidden="true"></span>
+                    <span class="assistant-card__body"><span class="assistant-card__title">@KindLabel(SupportAiConnectionKind.Off)</span></span>
+                </button>
+            </div>
+
+            @if (!IsProvider(_kind))
             {
-                <RadzenButton Text="@_text[SupportAssistantConnectionViewText.Save]" Icon="save" Click="SaveAsync" Disabled="_busy" Style="align-self: flex-start;" data-save />
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center">
+                    <RadzenButton Text="@_text[SupportAssistantConnectionViewText.Save]" Icon="save" Click="SaveAsync" Disabled="_busy" data-save />
+                    @if (_busy)
+                    {
+                        <RadzenProgressBarCircular ProgressBarStyle="ProgressBarStyle.Primary" Mode="ProgressBarMode.Indeterminate" Style="width: 20px; height: 20px;" ShowValue="false" data-busy />
+                    }
+                </RadzenStack>
             }
 
             @if (_reply != null)
@@ -112,6 +207,7 @@
     private SupportAiConnection _connection = new();
     private SupportAiModel[] _models = [];
     private SupportAiConnectionKind _kind;
+    private string _platformModelId;
     private string _address;
     private string _apiKey;
     private string _model;
@@ -140,6 +236,22 @@
 
     /// <summary>Whether the chosen provider needs a key; a server of the team's own may not.</summary>
     private bool RequiresApiKey => _choices.ProviderDefaults.FirstOrDefault(x => x.Kind == _kind)?.RequiresApiKey ?? true;
+
+    /// <summary>
+    /// The platform's frame is drawn whenever the host has anything to choose: with no model to offer it says so, rather
+    /// than leaving the team to wonder where the platform's option went.
+    /// </summary>
+    private bool ShowsPlatformFrame => _choices.Kinds.Length > 0;
+
+    /// <summary>The agreement of the chosen platform model, when it is a link a reader can safely follow.</summary>
+    private string ChosenAgreement
+    {
+        get
+        {
+            var url = _choices.PlatformModels.FirstOrDefault(x => x.Id == _platformModelId)?.AgreementUrl;
+            return Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? uri.AbsoluteUri : null;
+        }
+    }
 
     /// <remarks>What is left once the mask is taken out is the new key; nothing left keeps the stored one.</remarks>
     private void KeyTyped(string value)
@@ -183,6 +295,13 @@
 
     private void OnKindChanged(SupportAiConnectionKind kind) => Select(kind);
 
+    /// <summary>Choosing a platform model also chooses the platform.</summary>
+    private void ChoosePlatformModel(string modelId)
+    {
+        Select(SupportAiConnectionKind.Platform);
+        _platformModelId = modelId;
+    }
+
     /// <summary>Shows a kind as the team has it, or as the provider starts when the team has something else.</summary>
     private void Select(SupportAiConnectionKind kind)
     {
@@ -197,6 +316,12 @@
             : _choices.ProviderDefaults.FirstOrDefault(x => x.Kind == kind)?.BaseAddress;
         _model = current ? _connection.Model : null;
         _models = _model == null ? [] : [new SupportAiModel(_model, _model)];
+
+        // The team's own model when it is still offered, otherwise the one a team gets without choosing.
+        var offered = _choices.PlatformModels;
+        _platformModelId = offered.Any(x => x.Id == _connection.PlatformModelId) && _connection.Kind == SupportAiConnectionKind.Platform
+            ? _connection.PlatformModelId
+            : (offered.FirstOrDefault(x => x.IsDefault) ?? offered.FirstOrDefault())?.Id;
     }
 
     private SupportAiProviderRequest Request() => new()
@@ -232,7 +357,8 @@
         switch (_kind)
         {
             case SupportAiConnectionKind.Platform:
-                await Connections.UsePlatformModelAsync(_teamKey);
+                if (_choices.PlatformModels.Length > 0 && _platformModelId != null) await Connections.UsePlatformModelAsync(_teamKey, _platformModelId);
+                else await Connections.UsePlatformModelAsync(_teamKey);
                 break;
             case SupportAiConnectionKind.Off:
                 await Connections.TurnOffAsync(_teamKey);
@@ -276,6 +402,20 @@
     }
 
     private static bool IsProvider(SupportAiConnectionKind kind) => kind is not (SupportAiConnectionKind.Platform or SupportAiConnectionKind.Off);
+
+    /// <summary>A server of the team's own, as against an account at a provider's service.</summary>
+    private static bool SelfHosted(SupportAiConnectionKind kind) => kind is SupportAiConnectionKind.Ollama or SupportAiConnectionKind.LlamaCpp;
+
+    /// <summary>Where a reader finds out about, or gets an account at, a provider.</summary>
+    private static string SiteOf(SupportAiConnectionKind kind) => kind switch
+    {
+        SupportAiConnectionKind.Neurolito => "https://neurolito.com",
+        SupportAiConnectionKind.Anthropic => "https://www.anthropic.com",
+        SupportAiConnectionKind.OpenAI => "https://platform.openai.com",
+        SupportAiConnectionKind.Ollama => "https://ollama.com",
+        SupportAiConnectionKind.LlamaCpp => "https://github.com/ggml-org/llama.cpp",
+        _ => null
+    };
 
     private string KindLabel(SupportAiConnectionKind kind)
         => kind == SupportAiConnectionKind.Platform && _choices.PlatformModel != null

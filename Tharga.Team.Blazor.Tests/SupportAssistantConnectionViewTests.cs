@@ -50,14 +50,33 @@ public class SupportAssistantConnectionViewTests : BunitContext
         return Render<SupportAssistantConnectionView>();
     }
 
-    private static IRenderedComponent<RadzenRadioButtonList<SupportAiConnectionKind>> Kinds(IRenderedComponent<SupportAssistantConnectionView> view)
-        => view.FindComponent<RadzenRadioButtonList<SupportAiConnectionKind>>();
+    private const string Radios = "button[role=radio]";
 
-    private static async Task ChooseAsync(IRenderedComponent<SupportAssistantConnectionView> view, SupportAiConnectionKind kind)
+    /// <summary>What is checked: the kind of the card, or the model of a platform model's card.</summary>
+    private static string Chosen(IRenderedComponent<SupportAssistantConnectionView> view)
     {
-        var kinds = Kinds(view);
-        await view.InvokeAsync(() => kinds.Instance.Change.InvokeAsync(kind));
+        var card = view.FindAll($"{Radios}[aria-checked=true]").Single();
+        return card.GetAttribute("data-model") ?? card.GetAttribute("data-kind");
     }
+
+    private static string[] Offered(IRenderedComponent<SupportAssistantConnectionView> view)
+        => [.. view.FindAll(Radios).Select(x => x.GetAttribute("data-model") ?? x.GetAttribute("data-kind"))];
+
+    private static Task ChooseAsync(IRenderedComponent<SupportAssistantConnectionView> view, SupportAiConnectionKind kind)
+    {
+        view.Find($"{Radios}[data-kind={kind}]").Click();
+        return Task.CompletedTask;
+    }
+
+    private static SupportAiPlatformModelChoice Qwen => new()
+    {
+        Id = "qwen", DisplayName = "Qwen3 Coder", Provider = "Neurolito EU", ProcessedIn = "Sweden", StoredIn = "Germany",
+        AgreementUrl = "https://neurolito.com/dpa", IsDefault = true
+    };
+
+    private static SupportAiPlatformModelChoice Llama => new() { Id = "llama", DisplayName = "Llama 3", Provider = "Hetzner", ProcessedIn = "Finland", AgreementUrl = "https://hetzner.example/dpa" };
+
+    private static readonly SupportAiConnectionChoices WithCatalogue = AllChoices with { PlatformModels = [Qwen, Llama] };
 
     private static SupportAiConnection Neurolito() => new()
     {
@@ -74,7 +93,7 @@ public class SupportAssistantConnectionViewTests : BunitContext
     {
         var view = Render(Neurolito());
 
-        Assert.Equal(SupportAiConnectionKind.Neurolito, Kinds(view).Instance.Value);
+        Assert.Equal(nameof(SupportAiConnectionKind.Neurolito), Chosen(view));
         Assert.Equal(Address, view.Find("input[data-address]").GetAttribute("value"));
         Assert.Contains("Ada Admin", view.Find("[data-changed]").TextContent);
         Assert.Equal(SupportAssistantConnectionViewText.ApiKeyStored.Default, view.Find("[data-key-hint]").TextContent.Trim());
@@ -85,7 +104,7 @@ public class SupportAssistantConnectionViewTests : BunitContext
     {
         var view = Render();
 
-        Assert.Equal(SupportAiConnectionKind.Platform, Kinds(view).Instance.Value);
+        Assert.Equal(nameof(SupportAiConnectionKind.Platform), Chosen(view));
         Assert.Empty(view.FindAll("[data-changed]"));
         Assert.Empty(view.FindAll("input[data-key]"));
     }
@@ -95,8 +114,7 @@ public class SupportAssistantConnectionViewTests : BunitContext
     {
         var view = Render(choices: new SupportAiConnectionChoices { Kinds = [SupportAiConnectionKind.Platform, SupportAiConnectionKind.Off] });
 
-        var offered = view.FindComponents<RadzenRadioButtonListItem<SupportAiConnectionKind>>().Select(x => x.Instance.Value);
-        Assert.Equal([SupportAiConnectionKind.Platform, SupportAiConnectionKind.Off], offered);
+        Assert.Equal(["Platform", "Off"], Offered(view));
     }
 
     [Fact]
@@ -115,8 +133,7 @@ public class SupportAssistantConnectionViewTests : BunitContext
     {
         var view = Render(choices: AllChoices with { PlatformModel = "ollama, llama3" });
 
-        var platform = view.FindComponents<RadzenRadioButtonListItem<SupportAiConnectionKind>>().First(x => x.Instance.Value == SupportAiConnectionKind.Platform);
-        Assert.Equal("The platform's model (ollama, llama3)", platform.Instance.Text);
+        Assert.Contains("The platform's model (ollama, llama3)", view.Find($"{Radios}[data-kind=Platform]").TextContent);
     }
 
     [Fact]
@@ -124,8 +141,7 @@ public class SupportAssistantConnectionViewTests : BunitContext
     {
         var view = Render();
 
-        var platform = view.FindComponents<RadzenRadioButtonListItem<SupportAiConnectionKind>>().First(x => x.Instance.Value == SupportAiConnectionKind.Platform);
-        Assert.Equal(SupportAssistantConnectionViewText.KindPlatform.Default, platform.Instance.Text);
+        Assert.Contains(SupportAssistantConnectionViewText.KindPlatform.Default, view.Find($"{Radios}[data-kind=Platform]").TextContent);
     }
 
     private static readonly SupportAiConnectionChoices OpenAICompatible = new()
@@ -144,10 +160,135 @@ public class SupportAssistantConnectionViewTests : BunitContext
     {
         var view = Render(choices: OpenAICompatible);
 
-        var labels = view.FindComponents<RadzenRadioButtonListItem<SupportAiConnectionKind>>().ToDictionary(x => x.Instance.Value, x => x.Instance.Text);
-        Assert.Equal(SupportAssistantConnectionViewText.KindOpenAI.Default, labels[SupportAiConnectionKind.OpenAI]);
-        Assert.Equal(SupportAssistantConnectionViewText.KindOllama.Default, labels[SupportAiConnectionKind.Ollama]);
-        Assert.Equal(SupportAssistantConnectionViewText.KindLlamaCpp.Default, labels[SupportAiConnectionKind.LlamaCpp]);
+        string Label(SupportAiConnectionKind kind) => view.Find($"{Radios}[data-kind={kind}]").TextContent.Trim();
+        Assert.Equal(SupportAssistantConnectionViewText.KindOpenAI.Default, Label(SupportAiConnectionKind.OpenAI));
+        Assert.Equal(SupportAssistantConnectionViewText.KindOllama.Default, Label(SupportAiConnectionKind.Ollama));
+        Assert.Equal(SupportAssistantConnectionViewText.KindLlamaCpp.Default, Label(SupportAiConnectionKind.LlamaCpp));
+    }
+
+    /// <summary>Provider kinds sit in their own frame, the platform's models in another, and off is a card of its own, all in one radiogroup.</summary>
+    [Fact]
+    public void TheCards_AreRadios_InOneRadiogroup_InTwoFrames()
+    {
+        var view = Render(choices: WithCatalogue);
+
+        var group = view.Find("[role=radiogroup]");
+        Assert.Equal(["qwen", "llama", "Neurolito", "Off"], Offered(view));
+        Assert.Equal(4, group.QuerySelectorAll("button[role=radio]").Length);
+        Assert.Equal(2, view.FindAll("button[role=radio][data-model]").Count);
+        Assert.Single(view.FindAll("[data-frame=platform] button[role=radio][data-model=qwen]"));
+        Assert.Single(view.FindAll("[data-frame=own] button[role=radio][data-kind=Neurolito]"));
+        Assert.Empty(view.FindAll("[data-frame] button[data-kind=Off]"));
+        Assert.All(view.FindAll("button[role=radio]"), x => Assert.Equal("button", x.GetAttribute("type")));
+    }
+
+    /// <summary>Exactly one card is checked at any time, and the frame of the chosen one is marked.</summary>
+    [Fact]
+    public async Task ExactlyOneCard_IsChecked_AndItsFrameIsMarked()
+    {
+        var view = Render(Neurolito(), WithCatalogue);
+
+        Assert.Equal("Neurolito", Chosen(view));
+        Assert.Contains("assistant-frame--on", view.Find("[data-frame=own]").ClassName);
+        Assert.DoesNotContain("assistant-frame--on", view.Find("[data-frame=platform]").ClassName);
+
+        await ChooseAsync(view, SupportAiConnectionKind.Off);
+
+        Assert.Equal("Off", Chosen(view));
+        Assert.DoesNotContain("assistant-frame--on", view.Find("[data-frame=own]").ClassName);
+    }
+
+    /// <summary>The model a team has not chosen is the default one, marked as such, and the choice shows its agreement.</summary>
+    [Fact]
+    public void ATeamThatNeverChose_IsOnTheDefaultModel_WithItsDetailsAndAgreement()
+    {
+        var view = Render(choices: WithCatalogue);
+
+        Assert.Equal("qwen", Chosen(view));
+        var card = view.Find("button[data-model=qwen]");
+        Assert.Contains("Neurolito EU", card.TextContent);
+        Assert.Contains("Sweden", card.TextContent);
+        Assert.Contains("Germany", card.TextContent);
+        Assert.NotEmpty(card.QuerySelectorAll("[data-default]"));
+        Assert.Empty(view.Find("button[data-model=llama]").QuerySelectorAll("[data-default]"));
+        Assert.Equal("https://neurolito.com/dpa", view.Find("a[data-agreement]").GetAttribute("href"));
+    }
+
+    [Fact]
+    public void ATeamsOwnChoice_IsTheOneChecked_WhenItIsStillOffered()
+    {
+        var view = Render(new SupportAiConnection { Kind = SupportAiConnectionKind.Platform, PlatformModelId = "llama" }, WithCatalogue);
+
+        Assert.Equal("llama", Chosen(view));
+        Assert.Equal("https://hetzner.example/dpa", view.Find("a[data-agreement]").GetAttribute("href"));
+    }
+
+    [Fact]
+    public void AChoiceNoLongerOffered_FallsBackToTheDefault()
+    {
+        var view = Render(new SupportAiConnection { Kind = SupportAiConnectionKind.Platform, PlatformModelId = "gone" }, WithCatalogue);
+
+        Assert.Equal("qwen", Chosen(view));
+    }
+
+    [Fact]
+    public void ChoosingAPlatformModel_AndSaving_UsesThatModel()
+    {
+        var view = Render(Neurolito(), WithCatalogue);
+
+        view.Find("button[data-model=llama]").Click();
+        Assert.Equal("llama", Chosen(view));
+        view.Find("[data-save]").Click();
+
+        view.WaitForAssertion(() => _connections.Verify(x => x.UsePlatformModelAsync(TeamKey, "llama", default), Times.Once));
+    }
+
+    /// <summary>An agreement that is not an https link is not offered to follow.</summary>
+    [Fact]
+    public void AnAgreement_ThatIsNotHttps_IsNotLinked()
+    {
+        var view = Render(choices: AllChoices with { PlatformModels = [Qwen with { AgreementUrl = "javascript:alert(1)" }] });
+
+        Assert.Empty(view.FindAll("a[data-agreement]"));
+    }
+
+    [Fact]
+    public void WhenThePlatformOffersNoModel_ItSaysSo_AndTheTeamsOwnProvidersRemain()
+    {
+        var view = Render(choices: OpenAICompatible);
+
+        Assert.Contains(SupportAssistantConnectionViewText.PlatformOffersNone.Default, view.Find("[data-platform-none]").TextContent);
+        Assert.Equal(["OpenAI", "Ollama", "LlamaCpp", "Off"], Offered(view));
+    }
+
+    [Fact]
+    public void AProvidersForm_LinksToTheProvidersSite()
+    {
+        var view = Render(Neurolito());
+
+        var link = view.Find("a[data-site]");
+        Assert.Equal("https://neurolito.com", link.GetAttribute("href"));
+        Assert.Equal("_blank", link.GetAttribute("target"));
+        Assert.Contains("noopener", link.GetAttribute("rel"));
+    }
+
+    /// <summary>A busy form cannot be changed: the cards are disabled and a spinner shows.</summary>
+    [Fact]
+    public void ABusyForm_DisablesTheCards_AndShowsASpinner()
+    {
+        var gate = new TaskCompletionSource<SupportAiConnectionResult>();
+        _connections.Setup(x => x.ConnectAsync(TeamKey, It.IsAny<SupportAiProviderRequest>(), default)).Returns(gate.Task);
+        var view = Render(Neurolito());
+
+        view.Find("[data-save]").Click();
+
+        view.WaitForAssertion(() =>
+        {
+            Assert.All(view.FindAll("button[role=radio]"), x => Assert.True(x.HasAttribute("disabled")));
+            Assert.NotEmpty(view.FindComponents<RadzenProgressBarCircular>());
+        });
+        gate.SetResult(SupportAiConnectionResult.Success());
+        view.WaitForAssertion(() => Assert.All(view.FindAll("button[role=radio]"), x => Assert.False(x.HasAttribute("disabled"))));
     }
 
     /// <summary>OpenAI is a provider like any other: address, key, models.</summary>
