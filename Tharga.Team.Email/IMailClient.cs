@@ -38,4 +38,9 @@ public interface IMailClient
     /// them hides the message from the other. Progress is the returned position, kept by the caller.
     /// </remarks>
     Task<MailFetchResult> FetchAsync(MailFetchPosition position, CancellationToken cancellationToken = default);
+
+    /// <summary>Reads as <see cref="FetchAsync(MailFetchPosition, CancellationToken)"/> does, and with <paramref name="includeRaw"/> keeps each message as it arrived in <c>InboundMail.Raw</c>.</summary>
+    /// <remarks>A default member that ignores <paramref name="includeRaw"/>, so a client written earlier keeps compiling; the mail it reads then carries no original.</remarks>
+    Task<MailFetchResult> FetchAsync(MailFetchPosition position, bool includeRaw, CancellationToken cancellationToken = default)
+        => FetchAsync(position, cancellationToken);
 }

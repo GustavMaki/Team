@@ -81,7 +81,7 @@ public class SupportMailPollerTests
 
         await poller.PollAsync(CancellationToken.None);
 
-        await client.Received(1).FetchAsync(new MailFetchPosition(7, 30), Arg.Any<CancellationToken>());
+        await client.Received(1).FetchAsync(new MailFetchPosition(7, 30), true, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -224,7 +224,7 @@ public class SupportMailPollerTests
         client.CanRead.Returns(canRead);
         // Faithful to the real client on the part that matters: a fetch that finds nothing reports the
         // mailbox's UID generation with the position it was given, rather than rewinding it to zero.
-        client.FetchAsync(Arg.Any<MailFetchPosition>(), Arg.Any<CancellationToken>())
+        client.FetchAsync(Arg.Any<MailFetchPosition>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(call => new MailFetchResult(
                 new MailFetchPosition(7, mails.Length == 0 ? call.Arg<MailFetchPosition>().LastUid : 42u),
                 mails,

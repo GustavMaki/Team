@@ -1469,6 +1469,25 @@ Reading a file is not audited; a reply or answer records how many files it carri
 `SupportAttachmentPicker` is the file chooser the answer boxes use: `Files`/`FilesChanged`, `Disabled`, and
 `Limits` (the support service's when not set).
 
+### The original of a mail
+
+A mail that reaches a case is kept **as it arrived** (the raw MIME), beside the case's files, so staff can judge a suspicious
+sender, a delivery problem or a body trimmed too hard: its headers, To/Cc, original date, full quoted thread and structure.
+
+- **Kept on receipt**, in the same store as the files (`ISupportAttachmentStore`), and named by `SupportMessage.OriginalId`;
+  `HasOriginal` says whether there is one. It is never listed among a message's `Attachments`, so the attachment limits do not
+  apply to it and it is not offered as a file. Purging a case removes it with the files.
+- **Its own limit**, `MailOptions.MaxOriginalBytes` (20 MB), because the original carries every file again, encoded. A mail over
+  it is read as usual and kept without an original. A store that fails, or none registered, does the same; the mail is never lost.
+- **Received mail only.** An answer sent by mail has no original yet, and nothing received before this was kept has one.
+- **Read through the service:** `ISupportCaseService.GetMessageOriginalAsync(teamKey, caseId, sequence)` returns the bytes (a
+  `message/rfc822` message, ready to save as `.eml`) or null, authorized **exactly as reading the transcript** and not audited.
+  It is a default member returning null, so a host's own implementation keeps compiling.
+- **In the transcript**, a message with an original shows *Download original (.eml)* and *Read original* (a window with the raw
+  text, cut at 200,000 characters; the download has all of it), in the organisation's case view and the unassigned view alike.
+- **A host's own `IMailClient`** reads originals by implementing the new `FetchAsync(position, includeRaw, cancellationToken)`;
+  until then it reads as before and its mail has no original.
+
 ## Formatting
 
 Messages carry formatting: answers are written in a small rich-text editor, a mail's HTML is kept, and both are

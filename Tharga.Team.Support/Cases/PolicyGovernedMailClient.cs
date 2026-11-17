@@ -49,4 +49,7 @@ internal sealed class PolicyGovernedMailClient(
 
     public Task<MailFetchResult> FetchAsync(MailFetchPosition position, CancellationToken cancellationToken = default)
         => inner.FetchAsync(position, cancellationToken);
+
+    public Task<MailFetchResult> FetchAsync(MailFetchPosition position, bool includeRaw, CancellationToken cancellationToken = default)
+        => inner.FetchAsync(position, includeRaw, cancellationToken);
 }

@@ -1,0 +1,17 @@
+@* A received mail as it arrived, as plain text: its headers, its structure and its quoted thread, which the transcript trims. *@
+
+<RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" data-original-dialog>
+    @if (!string.IsNullOrEmpty(CutNote))
+    {
+        <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0" data-original-cut>@CutNote</RadzenText>
+    }
+    <pre data-original-text style="margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 65vh; overflow: auto; font-size: 0.8rem;">@Text</pre>
+</RadzenStack>
+
+@code {
+    /// <summary>The mail as text, as it arrived.</summary>
+    [Parameter] public string Text { get; set; }
+
+    /// <summary>Said above the text when it is only the start of the mail; null when the text is all of it.</summary>
+    [Parameter] public string CutNote { get; set; }
+}

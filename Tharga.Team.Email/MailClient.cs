@@ -72,7 +72,7 @@ internal sealed class MailClient(IOptions<MailOptions> options, ILogger<MailClie
     public Task<MailFetchResult> FetchAsync(MailFetchPosition position, CancellationToken cancellationToken = default) => FetchAsync(position, false, cancellationToken);
 
     /// <summary>Fetches as <see cref="FetchAsync(MailFetchPosition, CancellationToken)"/> does, and with <paramref name="includeRaw"/> keeps each message as it arrived.</summary>
-    internal async Task<MailFetchResult> FetchAsync(MailFetchPosition position, bool includeRaw, CancellationToken cancellationToken)
+    public async Task<MailFetchResult> FetchAsync(MailFetchPosition position, bool includeRaw, CancellationToken cancellationToken = default)
     {
         if (!CanRead) return MailFetchResult.Empty(position);
 

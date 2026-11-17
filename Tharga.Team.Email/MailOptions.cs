@@ -132,4 +132,8 @@ public class MailOptions
 
     /// <summary>The most files one mail may carry in or out. Default 20.</summary>
     public int MaxAttachmentCount { get; set; } = 20;
+
+    /// <summary>The largest original a support mail is kept as, in bytes; a mail over it is read as usual and kept without its original. Default 20 MB.</summary>
+    /// <remarks>Its own limit, apart from the attachment limits: the original carries every file again, encoded, so it is larger than the files it holds.</remarks>
+    public long MaxOriginalBytes { get; set; } = 20L * 1024 * 1024;
 }

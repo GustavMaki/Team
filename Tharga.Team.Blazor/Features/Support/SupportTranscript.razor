@@ -4,6 +4,7 @@
 @using Microsoft.JSInterop
 @inject ISupportCaseService SupportCases
 @inject IJSRuntime JsRuntime
+@inject DialogService DialogService
 @implements IAsyncDisposable
 
 @* One case's conversation as a chat: the person who raised it on one side, everybody answering on the other. *@
@@ -105,6 +106,25 @@
                     {
                         <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0" Style="color: var(--rz-danger);" data-attachment-unavailable="@missing.Id">
                             @_files.Format(SupportAttachmentText.NotAvailable, missing.FileName)
+                        </RadzenText>
+                    }
+                }
+
+                @* The mail as it arrived, where it was kept: saved as an .eml or read as text. Never offered on an entry that has none. *@
+                @if (message.HasOriginal && CaseId != null)
+                {
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem;" data-original="@message.Sequence">
+                        <RadzenButton Icon="download" Size="ButtonSize.ExtraSmall" Variant="Variant.Text" Text="@_text[SupportTranscriptText.DownloadOriginal]"
+                                      Disabled="@_openingOriginal.Contains(message.Sequence)" Click="@(() => DownloadOriginalAsync(message))"
+                                      data-original-download="@message.Sequence" />
+                        <RadzenButton Icon="article" Size="ButtonSize.ExtraSmall" Variant="Variant.Text" Text="@_text[SupportTranscriptText.ReadOriginal]"
+                                      Disabled="@_openingOriginal.Contains(message.Sequence)" Click="@(() => ReadOriginalAsync(message))"
+                                      data-original-read="@message.Sequence" />
+                    </div>
+                    @if (_originalUnavailable.Contains(message.Sequence))
+                    {
+                        <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0" Style="color: var(--rz-danger);" data-original-unavailable="@message.Sequence">
+                            @_text[SupportTranscriptText.OriginalNotAvailable]
                         </RadzenText>
                     }
                 }
@@ -337,6 +357,8 @@
     private readonly HashSet<int> _resending = [];
     private readonly HashSet<string> _opening = [];
     private readonly HashSet<string> _unavailable = [];
+    private readonly HashSet<int> _openingOriginal = [];
+    private readonly HashSet<int> _originalUnavailable = [];
     private SupportAttachmentFiles _browser;
 
     private readonly Dictionary<string, HtmlImage> _images = [];
@@ -455,6 +477,60 @@
         finally
         {
             _opening.Remove(attachment.Id);
+        }
+    }
+
+    /// <summary>How much of an original the window shows; the download always has all of it, so a mail of many megabytes never has to be drawn.</summary>
+    internal const int MaxOriginalChars = 200_000;
+
+    /// <remarks>Read through the service, so the original is checked exactly as reading the case is. It is saved, never opened: <c>message/rfc822</c> is not on the list of types the browser may show.</remarks>
+    private async Task DownloadOriginalAsync(SupportMessage message)
+    {
+        var original = await ReadOriginalBytesAsync(message);
+        if (original == null) return;
+
+        await using var content = new SupportAttachmentContent
+        {
+            Attachment = new SupportAttachment { Id = message.OriginalId, FileName = $"mail-{message.Sequence}.eml", ContentType = "message/rfc822", Size = original.Length },
+            Content = new MemoryStream(original, false)
+        };
+
+        _browser ??= new SupportAttachmentFiles(JsRuntime);
+        await _browser.OpenOrSaveAsync(content);
+    }
+
+    private async Task ReadOriginalAsync(SupportMessage message)
+    {
+        var original = await ReadOriginalBytesAsync(message);
+        if (original == null) return;
+
+        // Decoded as UTF-8: the mail's own parts say how they are encoded, and a reader looking at the raw text wants to see exactly that.
+        var text = System.Text.Encoding.UTF8.GetString(original);
+        var cut = text.Length > MaxOriginalChars;
+
+        await DialogService.OpenAsync<SupportOriginalDialog>(_text[SupportTranscriptText.OriginalTitle], new Dictionary<string, object>
+        {
+            { nameof(SupportOriginalDialog.Text), cut ? text[..MaxOriginalChars] : text },
+            { nameof(SupportOriginalDialog.CutNote), cut ? _text[SupportTranscriptText.OriginalCut] : null }
+        }, new DialogOptions { Width = "900px" });
+    }
+
+    private async Task<byte[]> ReadOriginalBytesAsync(SupportMessage message)
+    {
+        if (CaseId == null || !_openingOriginal.Add(message.Sequence)) return null;
+
+        try
+        {
+            var original = await SupportCases.GetMessageOriginalAsync(TeamKey, CaseId, message.Sequence);
+
+            if (original == null) _originalUnavailable.Add(message.Sequence);
+            else _originalUnavailable.Remove(message.Sequence);
+
+            return original;
+        }
+        finally
+        {
+            _openingOriginal.Remove(message.Sequence);
         }
     }
 
