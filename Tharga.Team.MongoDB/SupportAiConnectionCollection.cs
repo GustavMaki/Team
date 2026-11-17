@@ -25,6 +25,9 @@ public record SupportAiConnectionEntity : EntityBase
     /// <summary>The key as Data Protection protected it. Never the key itself.</summary>
     public string ProtectedApiKey { get; init; }
 
+    [BsonIgnoreIfNull]
+    public string PlatformModelId { get; init; }
+
     public DateTime ChangedAt { get; init; }
 
     public string ChangedByIdentity { get; init; }

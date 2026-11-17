@@ -1,0 +1,73 @@
+@using Tharga.Team.Blazor.Framework
+@using Tharga.Blazor
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider ServiceProvider
+@inject NavigationManager Navigation
+
+@* The platform's staff page for the support assistant: how much each team used (Usage), and which AI the platform offers (Configuration).
+   The Configuration tab is shown only to a caller holding support:aicatalogue:manage, and only where the catalogue is registered
+   (AddThargaSupportPlatformAiCatalogue). ?tab=usage or ?tab=configuration selects the tab, so a link can open either. *@
+
+@if (!_ready)
+{
+    <Loading />
+}
+else
+{
+    <RadzenTabs SelectedIndex="@_selected" SelectedIndexChanged="OnSelectedChanged" data-admin-tabs>
+        <Tabs>
+            <RadzenTabsItem Text="@_text[SupportAssistantAdminViewText.UsageTab]">
+                <SupportAssistantUsageView />
+            </RadzenTabsItem>
+            @if (_canConfigure)
+            {
+                <RadzenTabsItem Text="@_text[SupportAssistantAdminViewText.ConfigurationTab]">
+                    <PlatformAiCatalogueView />
+                </RadzenTabsItem>
+            }
+        </Tabs>
+    </RadzenTabs>
+}
+
+@code {
+    [Inject] private IThargaTextProvider TextProvider { get; set; }
+
+    /// <summary>Which tab to open: <c>usage</c> or <c>configuration</c>. Usage when not set, or when the caller may not configure.</summary>
+    [SupplyParameterFromQuery(Name = "tab")] public string Tab { get; set; }
+
+    private TextSet _text = TextSet.Empty;
+    private bool _ready;
+    private bool _canConfigure;
+    private int _selected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _text = await TextProvider.ResolveAsync(SupportAssistantAdminViewText.All);
+        _canConfigure = await CanConfigureAsync();
+        _selected = _canConfigure && string.Equals(Tab, "configuration", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        _ready = true;
+    }
+
+    /// <remarks>Asked of the service itself, so the scope is checked in the one place that checks it; a refusal hides the tab.</remarks>
+    private async Task<bool> CanConfigureAsync()
+    {
+        var catalogue = ServiceProvider.GetService<IPlatformAiCatalogueService>();
+        if (catalogue == null) return false;
+
+        try
+        {
+            await catalogue.GetCatalogueAsync();
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private void OnSelectedChanged(int index)
+    {
+        _selected = index;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tab", index == 1 ? "configuration" : "usage"), new NavigationOptions { ReplaceHistoryEntry = true });
+    }
+}

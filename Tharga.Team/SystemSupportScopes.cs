@@ -77,4 +77,10 @@ public static class SystemSupportScopes
     /// record by record, who asked, so it is a grant of its own rather than part of <see cref="AllRead"/>.
     /// </remarks>
     public const string UsageRead = "support:usage:read";
+
+    /// <summary>
+    /// Curating the platform's AI catalogue: its providers and their keys, the models teams may choose from, and which is the default
+    /// (<see cref="IPlatformAiCatalogueService"/>). Held by no level and no role by default; grant it to the platform's staff or a system key.
+    /// </summary>
+    public const string AiCatalogueManage = "support:aicatalogue:manage";
 }

@@ -47,6 +47,12 @@ public record ThargaTeamOptions
     public string SupportAiConnectionCollectionName { get; set; } = "SupportAiConnection";
 
     /// <summary>
+    /// Collection holding the platform's AI catalogue for the support assistant: its providers (keys only encrypted), the models
+    /// teams may choose from and the default, as one document. Default <c>PlatformAiCatalogue</c>.
+    /// </summary>
+    public string PlatformAiCatalogueCollectionName { get; set; } = "PlatformAiCatalogue";
+
+    /// <summary>
     /// Collection holding the support assistant's usage, one document per time it was asked. Default
     /// <c>SupportAssistantUsage</c>.
     /// </summary>

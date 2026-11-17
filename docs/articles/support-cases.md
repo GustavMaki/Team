@@ -1887,9 +1887,70 @@ builder.Services.AddThargaTeamRepository(...);   // Tharga.Team.MongoDB keeps th
   which nobody holds by default; map it to a system role as you do `support:all:read`.
 - **`SupportAssistantUsageView`** shows the same for a period (this month by default) with a total, team names
   where the reader may read the team directory, and the team key where not. `TeamKey` narrows it to one team.
+- **Sorted, with a period and a cost.** The view's column headings sort (click again to reverse), a line above the
+  table adds up the period (answers, tokens in, cached and out, and the cost), and a **Cost** column shows what the
+  priced answers cost. See *What an answer cost* below.
 - **A purged team's records go with it**: each names who asked.
 - **Your own store** implements `ISupportAssistantUsageStore` (a sink that can also be totalled) and is registered
   before the repository; the toolkit's registration then leaves it in place.
+
+#### What an answer cost
+
+Each usage record keeps **the price per million tokens it was given at**: the model's input, cached input and output
+price, the currency, and the cost worked out from them (`SupportAssistantUsageRecord.PriceInput`, `PriceCachedInput`,
+`PriceOutput`, `Currency`, `Cost`). A later price change therefore never rewrites what an earlier answer cost. Cached
+input is charged at its own price, or at the input price where none is given.
+
+- **Only the platform's catalogue prices an answer.** A team on its own provider, a team that is off, answers from
+  before prices were recorded, and a host with no catalogue are recorded **without a cost**, shown as a dash, never as
+  zero.
+- **Totals** add the cost up per team, provider, model and currency. The total row and the line above the table add it
+  up only where the priced rows share a currency; across currencies a sum means nothing, so none is shown.
+- **`ISupportAssistantPricing`** is what the support service asks for the price. `AddThargaSupportPlatformAiCatalogue`
+  registers one reading the catalogue; register your own before it to price answers from somewhere else. A lookup that
+  fails costs the record its price, never the answer.
+
+### The platform's AI catalogue
+
+By default every team on the platform is answered by the one `IChatClient` the host registered. With the catalogue,
+the platform's staff curate **which providers the platform has accounts with and which models teams may choose from**,
+and each team chooses one in `SupportAssistantConnectionView`.
+
+```csharp
+builder.Services.AddThargaSupportAiConnections();
+builder.Services.AddThargaSupportPlatformAiCatalogue();   // opt-in; the store comes from AddThargaTeamRepository
+builder.Services.AddThargaSupportAiProviders();           // or OpenAI: the kinds a provider can be
+```
+
+```razor
+@* For staff holding support:aicatalogue:manage (Configuration) and support:usage:read (Usage) *@
+<SupportAssistantAdminView />
+```
+
+- **A provider** is a name, a kind, an address and a key. The key is **encrypted with Data Protection under a purpose of
+  its own, never returned and never in a problem text or an audit entry**; the service says only whether one is stored.
+  A new key is checked against the provider (by listing its models, which spends no tokens) before anything is saved.
+  Leaving the key out keeps the stored one only while the kind and the address are unchanged, so nobody allowed to edit
+  the address can have the key sent to a server of their choosing.
+- **A model** names its provider and the model's identifier there, and carries what a team should know before choosing
+  it (where it is processed and stored, a link to the data processing agreement) and its prices per million tokens. A
+  model that is not **offered** stays in the list for staff and cannot be chosen.
+- **One default.** It answers a team that has not chosen one, and a team whose chosen model staff stopped offering. It
+  must be an offered model.
+- **A provider cannot be removed while a model is reached through it**, identifiers are unique, an agreement link must
+  be https, and a price cannot be negative.
+- **No catalogue, no change.** Without `AddThargaSupportPlatformAiCatalogue`, or while it offers no model, the
+  registered `IChatClient` answers as before. The catalogue is read on every answer, so a changed default, key or price
+  reaches the next answer without a restart; a client is reused until the catalogue or the team's choice changes.
+- **`IPlatformAiCatalogueService`** is the one place it is authorized (`support:aicatalogue:manage`, held by no level and no
+  role by default; grant it to staff or a system key) and every change and every test is audited under `assistant`.
+  Over REST, `MapThargaSupportPlatformAiCatalogue()` maps it under `/api/support/assistant/catalogue`: `GET`, `PUT
+  /provider`, `DELETE /provider/{id}`, `GET /provider/{id}/models`, `PUT /models` and `POST /models/{id}/test`.
+- **A team chooses** with `ISupportAiConnectionService.UsePlatformModelAsync(teamKey, modelId)` (over REST `PUT
+  /platform?model=ID`, over MCP `support.ai.use_platform_model` with `modelId`); the offered models are
+  `SupportAiConnectionChoices.PlatformModels`. A decorator of your own must forward the new overload.
+- **`SupportAssistantAdminView`** is the staff page around it: a **Usage** tab and a **Configuration** tab, the second
+  only for a caller holding the catalogue scope and only where the catalogue is registered. `?tab=configuration` opens it.
 
 ### Settings
 

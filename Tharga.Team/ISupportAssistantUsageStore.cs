@@ -67,4 +67,20 @@ public sealed record SupportAssistantUsageTotal
 
     /// <summary>All of them, as the provider totalled them.</summary>
     public long TotalTokens { get; init; }
+
+    /// <summary>What the priced answers cost, at the prices they were given at; null when none was priced.</summary>
+    public decimal? Cost { get; init; }
+
+    /// <summary>The currency of <see cref="Cost"/>; null when unpriced.</summary>
+    public string Currency { get; init; }
+}
+
+/// <summary>
+/// What a team's answers cost per million tokens right now, so each usage record can keep the price it was given at.
+/// </summary>
+/// <remarks>Optional: without one, usage is recorded unpriced.</remarks>
+public interface ISupportAssistantPricing
+{
+    /// <summary>The platform model that answers <paramref name="teamKey"/>, with its prices; null when its answers are not the platform's, or no prices are kept.</summary>
+    Task<PlatformAiModel> GetAsync(string teamKey, CancellationToken cancellationToken = default);
 }

@@ -22,6 +22,9 @@ public sealed record SupportAiConnection
     /// <summary>Whether a key is stored for the provider.</summary>
     public bool HasApiKey { get; init; }
 
+    /// <summary>When the team uses the platform's model: the <see cref="PlatformAiModel.Id"/> it chose, or null for whichever is the platform's default.</summary>
+    public string PlatformModelId { get; init; }
+
     /// <summary>When the connection was last changed; null when the team never chose.</summary>
     public DateTime? ChangedAt { get; init; }
 
@@ -43,6 +46,9 @@ public sealed record SupportAiConnectionChoices
     /// when the client does not say, or there is no platform model.
     /// </summary>
     public string PlatformModel { get; init; }
+
+    /// <summary>The platform's offered models a team may choose from; empty when the platform has only its one model.</summary>
+    public SupportAiPlatformModelChoice[] PlatformModels { get; init; } = [];
 }
 
 /// <summary>The address a provider kind starts from, and whether it needs a key.</summary>
@@ -117,4 +123,25 @@ public sealed record SupportAiConnectionResult
 
     /// <summary>It did not, and why.</summary>
     public static SupportAiConnectionResult Failure(string problem) => new() { Problem = problem };
+}
+
+/// <summary>An offered model as a team sees it: what to call it and what choosing it means for the team's conversations.</summary>
+public sealed record SupportAiPlatformModelChoice
+{
+    /// <summary>The <see cref="PlatformAiModel.Id"/> to pass to <c>UsePlatformModelAsync</c>.</summary>
+    public string Id { get; init; }
+
+    public string DisplayName { get; init; }
+
+    /// <summary>The provider's name, as staff gave it.</summary>
+    public string Provider { get; init; }
+
+    public string ProcessedIn { get; init; }
+
+    public string StoredIn { get; init; }
+
+    public string AgreementUrl { get; init; }
+
+    /// <summary>Whether it is the model a team is answered by when it has not chosen one.</summary>
+    public bool IsDefault { get; init; }
 }

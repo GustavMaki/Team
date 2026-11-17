@@ -1,0 +1,10 @@
+@page "/assistant-admin"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Tharga.Team.Blazor.Features.Support
+
+<PageTitle>Assistant administration</PageTitle>
+
+@* The platform's staff page: what each team used, and the AI catalogue teams choose from. Needs support:usage:read for the
+   usage and support:aicatalogue:manage for the configuration, which the Developer role holds in this sample. *@
+<SupportAssistantAdminView />

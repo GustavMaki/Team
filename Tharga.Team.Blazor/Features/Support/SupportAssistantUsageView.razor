@@ -36,20 +36,22 @@ else
         }
         else
         {
+            <RadzenText TextStyle="TextStyle.Body1" class="rz-m-0" data-totals-line>@TotalsLine()</RadzenText>
             <div style="overflow-x: auto;">
                 <table class="rz-grid-table rz-grid-table-fixed" data-usage>
                     <thead>
                         <tr>
-                            <th>@_text[SupportAssistantUsageViewText.Team]</th>
+                            <th style="cursor: pointer;" @onclick="@(() => SortBy(UsageSort.Team))" data-sort-team>@_text[SupportAssistantUsageViewText.Team]@SortMark(UsageSort.Team)</th>
                             <th>@_text[SupportAssistantUsageViewText.Provider]</th>
                             <th>@_text[SupportAssistantUsageViewText.Model]</th>
-                            <th style="text-align: end;">@_text[SupportAssistantUsageViewText.Answers]</th>
+                            <th style="text-align: end; cursor: pointer;" @onclick="@(() => SortBy(UsageSort.Answers))" data-sort-answers>@_text[SupportAssistantUsageViewText.Answers]@SortMark(UsageSort.Answers)</th>
                             <th style="text-align: end;">@_text[SupportAssistantUsageViewText.Declines]</th>
                             <th style="text-align: end;">@_text[SupportAssistantUsageViewText.ToolCalls]</th>
                             <th style="text-align: end;">@_text[SupportAssistantUsageViewText.InputTokens]</th>
                             <th style="text-align: end;">@_text[SupportAssistantUsageViewText.CachedTokens]</th>
                             <th style="text-align: end;">@_text[SupportAssistantUsageViewText.OutputTokens]</th>
-                            <th style="text-align: end;">@_text[SupportAssistantUsageViewText.TotalTokens]</th>
+                            <th style="text-align: end; cursor: pointer;" @onclick="@(() => SortBy(UsageSort.Tokens))" data-sort-tokens>@_text[SupportAssistantUsageViewText.TotalTokens]@SortMark(UsageSort.Tokens)</th>
+                            <th style="text-align: end; cursor: pointer;" @onclick="@(() => SortBy(UsageSort.Cost))" data-sort-cost>@_text[SupportAssistantUsageViewText.Cost]@SortMark(UsageSort.Cost)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -60,6 +62,7 @@ else
                                 <td data-provider>@(row.Provider ?? _text[SupportAssistantUsageViewText.Unknown])</td>
                                 <td data-model>@(row.Model ?? _text[SupportAssistantUsageViewText.Unknown])</td>
                                 @Counts(row)
+                                <td style="text-align: end;" data-cost>@CostText(row)</td>
                             </tr>
                         }
                     </tbody>
@@ -67,6 +70,7 @@ else
                         <tr data-usage-total style="font-weight: 600;">
                             <td colspan="3">@_text[SupportAssistantUsageViewText.Total]</td>
                             @Counts(_total)
+                            <td style="text-align: end;" data-cost>@CostText(_total)</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -81,6 +85,10 @@ else
 
     [Inject] private IThargaTextProvider TextProvider { get; set; }
 
+    private enum UsageSort { Team, Answers, Tokens, Cost }
+
+    private UsageSort _sort = UsageSort.Team;
+    private bool _descending;
     private TextSet _text = TextSet.Empty;
     private bool _ready;
     private bool _permitted = true;
@@ -121,9 +129,7 @@ else
     {
         try
         {
-            _rows = [.. (await Usage.GetUsageAsync(_from, _to.AddDays(1), TeamKey))
-                .OrderBy(x => x.TeamKey, StringComparer.Ordinal)
-                .ThenByDescending(x => x.TotalTokens)];
+            _rows = Sorted(await Usage.GetUsageAsync(_from, _to.AddDays(1), TeamKey));
             _total = TotalOf(_rows);
             _permitted = true;
             _teamNames ??= await TeamNamesAsync();
@@ -134,6 +140,39 @@ else
             _permitted = false;
         }
     }
+
+    private void SortBy(UsageSort sort)
+    {
+        _descending = _sort == sort && !_descending;
+        _sort = sort;
+        _rows = Sorted(_rows);
+    }
+
+    private string SortMark(UsageSort sort) => _sort != sort ? string.Empty : _descending ? " ▼" : " ▲";
+
+    /// <remarks>Ties fall back to the team and then the most tokens, so the order is the same every time.</remarks>
+    private SupportAssistantUsageTotal[] Sorted(IEnumerable<SupportAssistantUsageTotal> rows)
+    {
+        var ordered = _sort switch
+        {
+            UsageSort.Answers => _descending ? rows.OrderByDescending(x => x.Answers) : rows.OrderBy(x => x.Answers),
+            UsageSort.Tokens => _descending ? rows.OrderByDescending(x => x.TotalTokens) : rows.OrderBy(x => x.TotalTokens),
+            UsageSort.Cost => _descending ? rows.OrderByDescending(x => x.Cost ?? -1m) : rows.OrderBy(x => x.Cost ?? -1m),
+            _ => _descending ? rows.OrderByDescending(x => x.TeamKey, StringComparer.Ordinal) : rows.OrderBy(x => x.TeamKey, StringComparer.Ordinal)
+        };
+
+        return [.. ordered.ThenBy(x => x.TeamKey, StringComparer.Ordinal).ThenByDescending(x => x.TotalTokens)];
+    }
+
+    private string TotalsLine()
+    {
+        var line = _text.Format(SupportAssistantUsageViewText.TotalsLine, _total.Answers + _total.Declines, _total.TotalTokens, _total.InputTokens, _total.CachedInputTokens, _total.OutputTokens);
+        return _total.Cost == null ? line : $"{line} {_text.Format(SupportAssistantUsageViewText.CostLine, CostText(_total))}";
+    }
+
+    /// <summary>A cost with its currency, or the placeholder when unpriced.</summary>
+    private string CostText(SupportAssistantUsageTotal row)
+        => row.Cost == null ? _text[SupportAssistantUsageViewText.NoCost] : $"{row.Cost:N4} {row.Currency}".Trim();
 
     /// <summary>Every team's name by key, where the reader may read the directory; none where not, so keys are shown.</summary>
     private async Task<Dictionary<string, string>> TeamNamesAsync()
@@ -168,7 +207,10 @@ else
         InputTokens = rows.Sum(x => x.InputTokens),
         CachedInputTokens = rows.Sum(x => x.CachedInputTokens),
         OutputTokens = rows.Sum(x => x.OutputTokens),
-        TotalTokens = rows.Sum(x => x.TotalTokens)
+        TotalTokens = rows.Sum(x => x.TotalTokens),
+        // Added up only where the priced rows share a currency; a sum across currencies means nothing.
+        Cost = rows.Where(x => x.Cost != null).Select(x => x.Currency).Distinct().Count() == 1 ? rows.Where(x => x.Cost != null).Sum(x => x.Cost) : null,
+        Currency = rows.Where(x => x.Cost != null).Select(x => x.Currency).Distinct().Count() == 1 ? rows.First(x => x.Cost != null).Currency : null
     };
 
     private static RenderFragment Counts(SupportAssistantUsageTotal row) => __builder =>

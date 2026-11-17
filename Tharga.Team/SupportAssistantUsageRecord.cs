@@ -50,4 +50,33 @@ public sealed record SupportAssistantUsageRecord
 
     /// <summary>When it finished, in UTC.</summary>
     public DateTime At { get; init; }
+
+    /// <summary>The model's price per million input tokens when the answer was given, from the platform's catalogue; null when none was known (a team's own provider, or before prices were recorded).</summary>
+    public decimal? PriceInput { get; init; }
+
+    /// <summary>The price per million cached input tokens at the time; null when none was given.</summary>
+    public decimal? PriceCachedInput { get; init; }
+
+    /// <summary>The price per million output tokens at the time.</summary>
+    public decimal? PriceOutput { get; init; }
+
+    /// <summary>The currency of the prices and of <see cref="Cost"/>; null when unpriced.</summary>
+    public string Currency { get; init; }
+
+    /// <summary>What the answer cost at the prices it was given at, so a later price change never rewrites it; null when unpriced.</summary>
+    public decimal? Cost { get; init; }
+
+    /// <summary>
+    /// The cost of a number of tokens at a price per million: input that was not cached at the input price, cached input at the cached
+    /// price (the input price when none is given), and output at the output price. Null when no price is known.
+    /// </summary>
+    public static decimal? CostOf(long inputTokens, long cachedInputTokens, long outputTokens, decimal? priceInput, decimal? priceCachedInput, decimal? priceOutput)
+    {
+        if (priceInput == null && priceCachedInput == null && priceOutput == null) return null;
+
+        var cached = Math.Clamp(cachedInputTokens, 0, Math.Max(0, inputTokens));
+        var fresh = Math.Max(0, inputTokens) - cached;
+
+        return (fresh * (priceInput ?? 0m) + cached * (priceCachedInput ?? priceInput ?? 0m) + Math.Max(0, outputTokens) * (priceOutput ?? 0m)) / 1_000_000m;
+    }
 }

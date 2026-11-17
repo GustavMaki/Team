@@ -69,7 +69,8 @@ public static class SupportRegistration
             sp.GetRequiredService<SupportAiClientCache>(),
             sp.GetRequiredService<ILogger<StoredChatClientResolver>>(),
             sp.GetService<IChatClient>(),
-            CompositeSupportChatClientFactory.From(sp)));
+            CompositeSupportChatClientFactory.From(sp),
+            sp.GetService<IPlatformAiCatalogueStore>()));
 
         services.AddScoped<ISupportAiConnectionService>(sp => new AuditingSupportAiConnectionServiceDecorator(
             new AuthorizationSupportAiConnectionServiceDecorator(
@@ -80,7 +81,8 @@ public static class SupportRegistration
                     sp.GetRequiredService<TimeProvider>(),
                     sp.GetService<IChatClient>() != null,
                     CompositeSupportChatClientFactory.From(sp),
-                    SupportAiConnectionService.DescribePlatformModel(sp.GetService<IChatClient>())),
+                    SupportAiConnectionService.DescribePlatformModel(sp.GetService<IChatClient>()),
+                    sp.GetService<IPlatformAiCatalogueStore>()),
                 sp.GetRequiredService<TeamAuthorizer>()),
             sp.GetRequiredService<CompositeAuditLogger>(),
             sp.GetRequiredService<IAuditEntryFactory>()));
@@ -88,6 +90,43 @@ public static class SupportRegistration
         services.AddTransient<ITeamPurgeParticipant, SupportAiConnectionPurgeParticipant>();
 
         services.AddThargaScopes(scopes => RegisterTeamScope(scopes, SupportScopes.AssistantManage, options.ScopeAccessLevel, AssistantManageDescription));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Lets the platform's staff curate the AI the support assistant answers with: providers and their keys, the models teams may
+    /// choose from, and the default, through <see cref="IPlatformAiCatalogueService"/>.
+    /// </summary>
+    /// <remarks>
+    /// Opt-in, and without it nothing changes: the registered <c>IChatClient</c> answers as before. Once staff have offered a model,
+    /// a team on the platform is answered by the model it chose, or the default. Needs <see cref="AddThargaSupportAiConnections"/>
+    /// and providers from a <see cref="ISupportChatClientFactory"/>. Nobody holds <see cref="SystemSupportScopes.AiCatalogueManage"/>
+    /// by default; grant it to the platform's staff or a system key. Keys are encrypted with Data Protection under a purpose of their own.
+    /// </remarks>
+    public static IServiceCollection AddThargaSupportPlatformAiCatalogue(this IServiceCollection services)
+    {
+        if (services.Any(x => x.ServiceType == typeof(IPlatformAiCatalogueService))) return services;
+
+        services.AddDataProtection();
+        services.TryAddSingleton(TimeProvider.System);
+
+        services.AddScoped<IPlatformAiCatalogueService>(sp => new AuditingPlatformAiCatalogueServiceDecorator(
+            new AuthorizationPlatformAiCatalogueServiceDecorator(
+                new PlatformAiCatalogueService(
+                    sp.GetRequiredService<IPlatformAiCatalogueStore>(),
+                    sp.GetRequiredService<IDataProtectionProvider>(),
+                    sp.GetRequiredService<TeamAuthorizer>(),
+                    sp.GetRequiredService<TimeProvider>(),
+                    CompositeSupportChatClientFactory.From(sp)),
+                sp.GetRequiredService<TeamAuthorizer>()),
+            sp.GetRequiredService<CompositeAuditLogger>(),
+            sp.GetRequiredService<IAuditEntryFactory>()));
+
+        services.TryAddScoped<ISupportAssistantPricing, PlatformAiPricing>();
+
+        services.AddThargaSystemScopes(scopes => scopes.Register(SystemSupportScopes.AiCatalogueManage,
+            "Curate the platform's AI catalogue for the support assistant -- the providers and their keys, the models teams may choose from with their prices, and which is the default. Reaches the platform's accounts with its AI providers and what every team's conversations are answered by."));
 
         return services;
     }
@@ -375,7 +414,8 @@ public static class SupportRegistration
                     sp.GetService<SupportAnswerOptions>(),
                     sp.GetService<SupportMailboxes>(),
                 sp.GetService<ISupportCaseContactResolver>(),
-                sp.GetService<ITeamOversightService>()),
+                sp.GetService<ITeamOversightService>(),
+                sp.GetService<ISupportAssistantPricing>()),
                 sp.GetRequiredService<TeamAuthorizer>(),
                 caseOptions.Visibility,
                 caseOptions.StaffCloseAfter,

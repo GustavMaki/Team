@@ -23,6 +23,25 @@ public record SupportAssistantUsageRecordEntity : EntityBase
     public bool Answered { get; init; }
     public TimeSpan Duration { get; init; }
     public DateTime At { get; init; }
+
+    [global::MongoDB.Bson.Serialization.Attributes.BsonIgnoreIfNull]
+    [global::MongoDB.Bson.Serialization.Attributes.BsonRepresentation(BsonType.Decimal128)]
+    public decimal? PriceInput { get; init; }
+
+    [global::MongoDB.Bson.Serialization.Attributes.BsonIgnoreIfNull]
+    [global::MongoDB.Bson.Serialization.Attributes.BsonRepresentation(BsonType.Decimal128)]
+    public decimal? PriceCachedInput { get; init; }
+
+    [global::MongoDB.Bson.Serialization.Attributes.BsonIgnoreIfNull]
+    [global::MongoDB.Bson.Serialization.Attributes.BsonRepresentation(BsonType.Decimal128)]
+    public decimal? PriceOutput { get; init; }
+
+    [global::MongoDB.Bson.Serialization.Attributes.BsonIgnoreIfNull]
+    public string Currency { get; init; }
+
+    [global::MongoDB.Bson.Serialization.Attributes.BsonIgnoreIfNull]
+    [global::MongoDB.Bson.Serialization.Attributes.BsonRepresentation(BsonType.Decimal128)]
+    public decimal? Cost { get; init; }
 }
 
 public interface ISupportAssistantUsageCollection : IDiskRepositoryCollection<SupportAssistantUsageRecordEntity>
@@ -86,14 +105,17 @@ public class SupportAssistantUsageCollection : DiskRepositoryCollectionBase<Supp
             PipelineStageDefinitionBuilder.Match(Period(from, to, teamKey)),
             new BsonDocumentPipelineStageDefinition<SupportAssistantUsageRecordEntity, BsonDocument>(new BsonDocument("$group", new BsonDocument
             {
-                { "_id", new BsonDocument { { "t", "$" + nameof(SupportAssistantUsageRecordEntity.TeamKey) }, { "p", "$" + nameof(SupportAssistantUsageRecordEntity.Provider) }, { "m", "$" + nameof(SupportAssistantUsageRecordEntity.Model) } } },
+                { "_id", new BsonDocument { { "t", "$" + nameof(SupportAssistantUsageRecordEntity.TeamKey) }, { "p", "$" + nameof(SupportAssistantUsageRecordEntity.Provider) }, { "m", "$" + nameof(SupportAssistantUsageRecordEntity.Model) }, { "c", "$" + nameof(SupportAssistantUsageRecordEntity.Currency) } } },
                 { "answers", Count(true) },
                 { "declines", Count(false) },
                 { "toolCalls", Sum(nameof(SupportAssistantUsageRecordEntity.ToolCalls)) },
                 { "input", Sum(nameof(SupportAssistantUsageRecordEntity.InputTokens)) },
                 { "cached", Sum(nameof(SupportAssistantUsageRecordEntity.CachedInputTokens)) },
                 { "output", Sum(nameof(SupportAssistantUsageRecordEntity.OutputTokens)) },
-                { "total", Sum(nameof(SupportAssistantUsageRecordEntity.TotalTokens)) }
+                { "total", Sum(nameof(SupportAssistantUsageRecordEntity.TotalTokens)) },
+                { "cost", Sum(nameof(SupportAssistantUsageRecordEntity.Cost)) },
+                // $sum skips what is not a number, so a group with no priced answer would read 0; this tells the two apart.
+                { "priced", new BsonDocument("$sum", new BsonDocument("$cond", new BsonArray { new BsonDocument("$isNumber", "$" + nameof(SupportAssistantUsageRecordEntity.Cost)), 1, 0 })) }
             }))
         ];
 
@@ -117,7 +139,9 @@ public class SupportAssistantUsageCollection : DiskRepositoryCollectionBase<Supp
             InputTokens = row["input"].ToInt64(),
             CachedInputTokens = row["cached"].ToInt64(),
             OutputTokens = row["output"].ToInt64(),
-            TotalTokens = row["total"].ToInt64()
+            TotalTokens = row["total"].ToInt64(),
+            Cost = row.TryGetValue("priced", out var priced) && priced.ToInt64() > 0 ? row["cost"].ToDecimal() : null,
+            Currency = Text(key, "c")
         };
     }
 }

@@ -37,7 +37,8 @@ internal sealed class SupportCaseService(
     SupportAnswerOptions answerOptions = null,
     SupportMailboxes mailboxes = null,
     ISupportCaseContactResolver contactResolver = null,
-    ITeamOversightService teamOversight = null) : ISupportCaseService, ISupportCaseTeamQueries
+    ITeamOversightService teamOversight = null,
+    ISupportAssistantPricing pricing = null) : ISupportCaseService, ISupportCaseTeamQueries
 {
     private readonly SupportAttachmentLimits _attachmentLimits = attachmentLimits ?? SupportAttachmentLimits.Default;
     private readonly ISupportAssistantUsageSink[] _usageSinks = usageSinks?.ToArray() ?? [];
@@ -214,8 +215,16 @@ internal sealed class SupportCaseService(
         var usage = answer?.Usage;
         if (usage == null || _usageSinks.Length == 0) return;
 
+        // The price as it is now, kept on the record, so a later change of price never rewrites what this answer cost.
+        var price = await PriceAsync(supportCase.TeamKey, cancellationToken);
+
         var record = new SupportAssistantUsageRecord
         {
+            PriceInput = price?.PriceInput,
+            PriceCachedInput = price?.PriceCachedInput,
+            PriceOutput = price?.PriceOutput,
+            Currency = price?.Currency,
+            Cost = price == null ? null : SupportAssistantUsageRecord.CostOf(usage.InputTokens, usage.CachedInputTokens, usage.OutputTokens, price.PriceInput, price.PriceCachedInput, price.PriceOutput),
             TeamKey = supportCase.TeamKey,
             CaseId = supportCase.Id,
             AskedBy = await authorizer.GetSubjectAsync(),
@@ -241,6 +250,23 @@ internal sealed class SupportCaseService(
             {
                 logger?.LogWarning(ex, "A support assistant usage sink failed for case {CaseId}. The answer stands; only its usage record was lost there.", supportCase.Id);
             }
+        }
+    }
+
+    /// <remarks>A failing price lookup costs the record its price, never the answer.</remarks>
+    private async Task<PlatformAiModel> PriceAsync(string teamKey, CancellationToken cancellationToken)
+    {
+        if (pricing == null) return null;
+
+        try
+        {
+            var model = await pricing.GetAsync(teamKey, cancellationToken);
+            return model is { PriceInput: null, PriceCachedInput: null, PriceOutput: null } ? null : model;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger?.LogWarning(ex, "The assistant's price for team {TeamKey} could not be read, so its usage is recorded unpriced.", teamKey);
+            return null;
         }
     }
 

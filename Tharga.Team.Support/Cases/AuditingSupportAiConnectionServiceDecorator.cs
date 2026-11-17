@@ -34,6 +34,9 @@ internal sealed class AuditingSupportAiConnectionServiceDecorator(
     public Task UsePlatformModelAsync(string teamKey, CancellationToken cancellationToken = default)
         => AuditAsync("use-platform", nameof(UsePlatformModelAsync), teamKey, Meta(SupportAiConnectionKind.Platform), () => inner.UsePlatformModelAsync(teamKey, cancellationToken));
 
+    public Task UsePlatformModelAsync(string teamKey, string modelId, CancellationToken cancellationToken = default)
+        => AuditAsync("use-platform", nameof(UsePlatformModelAsync), teamKey, Meta(SupportAiConnectionKind.Platform, modelId), () => inner.UsePlatformModelAsync(teamKey, modelId, cancellationToken));
+
     public Task TurnOffAsync(string teamKey, CancellationToken cancellationToken = default)
         => AuditAsync("turn-off", nameof(TurnOffAsync), teamKey, Meta(SupportAiConnectionKind.Off), () => inner.TurnOffAsync(teamKey, cancellationToken));
 

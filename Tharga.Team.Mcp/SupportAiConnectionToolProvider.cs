@@ -46,6 +46,8 @@ public sealed class SupportAiConnectionToolProvider : IMcpToolProvider
 
     private static readonly JsonElement NoArguments = JsonDocument.Parse("""{"type":"object","properties":{}}""").RootElement.Clone();
 
+    private static readonly JsonElement PlatformModelArguments = JsonDocument.Parse("""{"type":"object","properties":{"modelId":{"type":"string","description":"A platform model's id, from support.ai.get_choices. Leave out for the platform's default."}}}""").RootElement.Clone();
+
     private static readonly JsonElement ProviderArguments = JsonDocument.Parse("""
         {
           "type": "object",
@@ -77,7 +79,7 @@ public sealed class SupportAiConnectionToolProvider : IMcpToolProvider
             new() { Name = ListModels, Description = "Lists the models a provider offers for a key, so one can be chosen. Saves nothing.", InputSchema = ProviderArguments },
             new() { Name = Test, Description = "Sends the model one short message and returns its reply, to show that answering works. Saves nothing.", InputSchema = ProviderArguments },
             new() { Name = Connect, Description = "Answers the team with a provider, after checking that the provider lists the chosen model for the key. Nothing is saved unless that check passes. The key is stored encrypted and never returned. Requires assistant:manage.", InputSchema = ProviderArguments },
-            new() { Name = UsePlatformModel, Description = "Answers the team with the platform's model, and forgets any key the team stored. Requires assistant:manage.", InputSchema = NoArguments },
+            new() { Name = UsePlatformModel, Description = "Answers the team with the platform's model, and forgets any key the team stored. Pass modelId, one of the platform models support.ai.get_choices lists, to choose that one; leave it out for the platform's default. Requires assistant:manage.", InputSchema = PlatformModelArguments },
             new() { Name = TurnOff, Description = "Turns the support assistant off for the team, and forgets any key the team stored. Requires assistant:manage.", InputSchema = NoArguments }
         ];
 
@@ -120,12 +122,12 @@ public sealed class SupportAiConnectionToolProvider : IMcpToolProvider
                 case UsePlatformModel:
                     try
                     {
-                        await _service.UsePlatformModelAsync(teamKey, cancellationToken);
+                        await _service.UsePlatformModelAsync(teamKey, Text(arguments, "modelId"), cancellationToken);
                         return Ok(new { done = true });
                     }
-                    catch (InvalidOperationException)
+                    catch (InvalidOperationException ex)
                     {
-                        return Error("This site has no platform model to answer with.");
+                        return Error(ex.Message);
                     }
                 case TurnOff:
                     await _service.TurnOffAsync(teamKey, cancellationToken);

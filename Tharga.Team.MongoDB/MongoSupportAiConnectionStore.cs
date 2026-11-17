@@ -27,6 +27,7 @@ internal sealed class MongoSupportAiConnectionStore(ISupportAiConnectionCollecti
             .Set(x => x.BaseAddress, connection.BaseAddress)
             .Set(x => x.Model, connection.Model)
             .Set(x => x.ProtectedApiKey, connection.ProtectedApiKey)
+            .Set(x => x.PlatformModelId, connection.PlatformModelId)
             .Set(x => x.ChangedAt, connection.ChangedAt)
             .Set(x => x.ChangedByIdentity, connection.ChangedByIdentity)
             .Set(x => x.ChangedByName, connection.ChangedByName);
@@ -56,6 +57,7 @@ internal sealed class MongoSupportAiConnectionStore(ISupportAiConnectionCollecti
         BaseAddress = entity.BaseAddress,
         Model = entity.Model,
         ProtectedApiKey = entity.ProtectedApiKey,
+        PlatformModelId = entity.PlatformModelId,
         ChangedAt = entity.ChangedAt,
         ChangedByIdentity = entity.ChangedByIdentity,
         ChangedByName = entity.ChangedByName
@@ -68,6 +70,7 @@ internal sealed class MongoSupportAiConnectionStore(ISupportAiConnectionCollecti
         BaseAddress = record.BaseAddress,
         Model = record.Model,
         ProtectedApiKey = record.ProtectedApiKey,
+        PlatformModelId = record.PlatformModelId,
         ChangedAt = record.ChangedAt,
         ChangedByIdentity = record.ChangedByIdentity,
         ChangedByName = record.ChangedByName

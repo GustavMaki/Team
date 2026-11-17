@@ -56,7 +56,9 @@ public class ComponentDependencyResolutionTests
         // Registered by AddThargaSupportAiConnections in Tharga.Team.Support; only a host letting teams choose their AI places the view.
         "ISupportAiConnectionService",
         // Registered by AddThargaSupportCases in Tharga.Team.Support; only a host whose staff read the assistant's usage places the view.
-        "ISupportAssistantUsageService"
+        "ISupportAssistantUsageService",
+        // Registered by AddThargaSupportPlatformAiCatalogue in Tharga.Team.Support; only a host whose staff curate the platform's AI places the view.
+        "IPlatformAiCatalogueService"
     ];
 
     /// <summary>Services the host supplies by construction — its own storage types and member type.</summary>

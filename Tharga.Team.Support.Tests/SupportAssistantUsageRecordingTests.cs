@@ -102,6 +102,71 @@ public class SupportAssistantUsageRecordingTests
         Assert.Single(after.Records);
     }
 
+    /// <summary>The price as it is when the answer is given goes on the record with the cost it worked out, so a later price change never rewrites it.</summary>
+    [Fact]
+    public async Task APricedAnswer_KeepsThePricesItWasGivenAt_AndWhatItCost()
+    {
+        var sink = new CollectingSink();
+        var pricing = Substitute.For<ISupportAssistantPricing>();
+        pricing.GetAsync(TeamA, Arg.Any<CancellationToken>()).Returns(new PlatformAiModel { Id = "m1", PriceInput = 3m, PriceCachedInput = 0.3m, PriceOutput = 15m, Currency = "USD" });
+        var world = new World(pricing, Answering(SupportAnswer.FromBody(AnswerText) with { Usage = Usage }), sink);
+        var raised = await world.Service.RaiseCaseAsync(TeamA, null, Question, SupportAssistance.Assistant);
+
+        await world.Service.RunAssistantAsync(TeamA, raised.Id);
+
+        var record = Assert.Single(sink.Records);
+        Assert.Equal((3m, 0.3m, 15m, "USD"), (record.PriceInput, record.PriceCachedInput, record.PriceOutput, record.Currency));
+        // 210 fresh input at 3, 400 cached at 0.3, 220 output at 15, per million tokens.
+        Assert.Equal((210 * 3m + 400 * 0.3m + 220 * 15m) / 1_000_000m, record.Cost);
+    }
+
+    [Fact]
+    public async Task AnAnswerWithNoPrice_IsRecordedWithNoCost_NotACostOfZero()
+    {
+        var sink = new CollectingSink();
+        var pricing = Substitute.For<ISupportAssistantPricing>();
+        pricing.GetAsync(TeamA, Arg.Any<CancellationToken>()).Returns((PlatformAiModel)null);
+        var world = new World(pricing, Answering(SupportAnswer.FromBody(AnswerText) with { Usage = Usage }), sink);
+        var raised = await world.Service.RaiseCaseAsync(TeamA, null, Question, SupportAssistance.Assistant);
+
+        await world.Service.RunAssistantAsync(TeamA, raised.Id);
+
+        var record = Assert.Single(sink.Records);
+        Assert.Null(record.Cost);
+        Assert.Null(record.Currency);
+    }
+
+    /// <summary>The answer is the customer's: a price that cannot be read costs the record its price, nothing more.</summary>
+    [Fact]
+    public async Task APriceThatCannotBeRead_StillLeavesTheAnswerAndItsRecord()
+    {
+        var sink = new CollectingSink();
+        var pricing = Substitute.For<ISupportAssistantPricing>();
+        pricing.GetAsync(TeamA, Arg.Any<CancellationToken>()).Returns<PlatformAiModel>(_ => throw new InvalidOperationException("The catalogue is down."));
+        var world = new World(pricing, Answering(SupportAnswer.FromBody(AnswerText) with { Usage = Usage }), sink);
+        var raised = await world.Service.RaiseCaseAsync(TeamA, null, Question, SupportAssistance.Assistant);
+
+        Assert.True(await world.Service.RunAssistantAsync(TeamA, raised.Id));
+
+        Assert.Null(Assert.Single(sink.Records).Cost);
+    }
+
+    [Theory]
+    [InlineData(1000, 0, 500, "3", "0.3", "15", "0.0105")]
+    [InlineData(1000, 400, 0, "3", "0.3", "15", "0.00192")]
+    [InlineData(1000, 400, 0, "3", null, "15", "0.003")]
+    [InlineData(1000, 9999, 0, "3", "0.3", "15", "0.0003")]
+    public void TheCost_IsPerMillionTokens_WithCachedInputAtItsOwnPrice(long input, long cached, long output, string priceInput, string priceCached, string priceOutput, string expected)
+    {
+        static decimal? Price(string text) => text == null ? null : decimal.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.Equal(Price(expected), SupportAssistantUsageRecord.CostOf(input, cached, output, Price(priceInput), Price(priceCached), Price(priceOutput)));
+    }
+
+    [Fact]
+    public void WithNoPriceAtAll_ThereIsNoCost()
+        => Assert.Null(SupportAssistantUsageRecord.CostOf(1000, 0, 500, null, null, null));
+
     private static ISupportResponder Answering(SupportAnswer answer)
     {
         var responder = Substitute.For<ISupportResponder>();
@@ -111,14 +176,18 @@ public class SupportAssistantUsageRecordingTests
 
     private sealed class World
     {
-        public World(ISupportResponder responder, params ISupportAssistantUsageSink[] sinks)
+        public World(ISupportResponder responder, params ISupportAssistantUsageSink[] sinks) : this(null, responder, sinks)
+        {
+        }
+
+        public World(ISupportAssistantPricing pricing, ISupportResponder responder, params ISupportAssistantUsageSink[] sinks)
         {
             var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Alice), new Claim(ClaimTypes.Name, "Alice"), new Claim(TeamClaimTypes.TeamKey, TeamA)], "test"));
             var authorizer = new TeamAuthorizer(new FixedPrincipalAccessor(principal));
 
             Service = new AuditingSupportCaseServiceDecorator(
                 new AuthorizationSupportCaseServiceDecorator(
-                    new SupportCaseService(new InMemorySupportCaseStore(), authorizer, TimeProvider.System, responder: responder, usageSinks: sinks, logger: NullLogger<SupportCaseService>.Instance),
+                    new SupportCaseService(new InMemorySupportCaseStore(), authorizer, TimeProvider.System, responder: responder, usageSinks: sinks, logger: NullLogger<SupportCaseService>.Instance, pricing: pricing),
                     authorizer),
                 new CompositeAuditLogger(Array.Empty<IAuditLogger>(), Options.Create(new AuditOptions())),
                 new AuditEntryFactory(null));

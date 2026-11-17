@@ -205,13 +205,22 @@ public class SupportAiConnectionToolProviderTests
         var result = await Provider().CallToolAsync(SupportAiConnectionToolProvider.UsePlatformModel, NoArgs, Context(), TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError);
-        await _service.Received(1).UsePlatformModelAsync(Team, Arg.Any<CancellationToken>());
+        await _service.Received(1).UsePlatformModelAsync(Team, null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UsingThePlatformModel_CanNameOneOfTheOfferedModels()
+    {
+        var result = await Provider().CallToolAsync(SupportAiConnectionToolProvider.UsePlatformModel, Args(new { modelId = "m1" }), Context(), TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsError);
+        await _service.Received(1).UsePlatformModelAsync(Team, "m1", Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ASiteWithNoPlatformModel_SaysSo_InsteadOfFailingTheCall()
     {
-        _service.UsePlatformModelAsync(Team, Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("none")));
+        _service.UsePlatformModelAsync(Team, Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("This site has no platform model to answer with.")));
 
         var result = await Provider().CallToolAsync(SupportAiConnectionToolProvider.UsePlatformModel, NoArgs, Context(), TestContext.Current.CancellationToken);
 
