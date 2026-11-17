@@ -30,6 +30,13 @@ Everything above goes through one transport, `IMailClient`, which never throws: 
   and anything that goes wrong means not verified. **It vouches for the domain's mail system, not for a person.**
 - **A mailbox that could not be read** returns `MailFetchResult.Error` with the server's reason, never the
   password.
+- **A failed read is logged by what it is** (Tharga/Team#510), and every row from a read carries the mailbox in its log scope:
+  `MailHost`, `MailUser` (the mailbox's own sign-in, which tells two mailboxes on one host apart) and `MailFolder`. A **timeout or
+  a dropped connection** is a Warning, and an Error only after five in a row and then every thirty, so a blip is not an alert but
+  an outage still is. A **rejected sign-in** is an Error each time it is tried, but is not tried at every poll: the wait doubles
+  from a minute up to an hour, and a changed password is tried at once. A read the host asked to stop is not logged at all, and a
+  mailbox that reads again after failing says so once. The wait is kept per mailbox for the process, so it holds across the
+  poll-by-poll clients; `MailFetchResult.Deferred` is true for a poll that was skipped, which a poller can leave quiet.
 - **`MailOptions`** gained `FirstReadSince`, where a mailbox with no read position starts, and the file limits
   `MaxAttachmentBytes` (25 MB), `MaxAttachmentTotalBytes` (50 MB) and `MaxAttachmentCount` (20).
 - **`HtmlText.ToPlainText(html)`** is the plain-text rendering the toolkit uses for HTML: paragraphs kept, list
