@@ -38,7 +38,8 @@ public class FullDirectoryReadGuardTests
     private const string FullDirectoryRead = "UserService.GetAsync()";
     private const string DecisionMarker = "SystemUserScopes.Manage";
 
-    private static readonly Regex ComponentFile = new(@"\.razor(\.cs)?$", RegexOptions.Compiled);
+    // TeamViewContext reads the directory for every team component, so it is scanned as if it were one.
+    private static readonly Regex ComponentFile = new(@"\.razor(\.cs)?$|^TeamViewContext\.cs$", RegexOptions.Compiled);
 
     private static DirectoryInfo ComponentRoot()
     {
@@ -90,7 +91,7 @@ public class FullDirectoryReadGuardTests
             "and the guard above is checking almost nothing.");
 
         Assert.Contains(readers, x => x.File.EndsWith("AuditLogView.razor.cs", StringComparison.Ordinal));
-        Assert.Contains(readers, x => x.File.EndsWith("TeamComponent.razor", StringComparison.Ordinal));
+        Assert.Contains(readers, x => x.File.EndsWith("TeamViewContext.cs", StringComparison.Ordinal));
     }
 
     /// <summary>And that it rejects the shape it exists to catch — #222 exactly as it was.</summary>

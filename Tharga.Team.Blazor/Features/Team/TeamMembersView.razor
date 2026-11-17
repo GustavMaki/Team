@@ -1,0 +1,667 @@
+@using System.ComponentModel
+@using Microsoft.Extensions.DependencyInjection
+@using Microsoft.Extensions.Logging
+@using Microsoft.Extensions.Options
+@using Microsoft.JSInterop
+@using Tharga.Team.Blazor.Features.User
+@using Tharga.Toolkit
+@typeparam TMember where TMember : class, Tharga.Team.ITeamMember
+@inject ITeamManagementService TeamManagementService
+@inject ITeamDirectoryService TeamDirectoryService
+@inject ITeamOversightService TeamOversightService
+@inject IServiceProvider ServiceProvider
+@inject IJSRuntime Js
+@inject DialogService DialogService
+@inject NavigationManager NavigationManager
+@inject NotificationService NotificationService
+@inject IOptions<ThargaBlazorOptions> BlazorOptions
+@inject ILogger<TeamMembersView<TMember>> Logger
+
+@* One team's members: the member grid with its columns and actions, the pending access requests, and (unless
+   ShowHeader is false) the team's consent selector and actions above them.
+
+   This is what the team list draws for each team, so a page of its own for the selected team can use it without the list
+   around it. Used alone it reads the team itself (TeamKey, or the selected team); inside TeamComponent it is handed the
+   team and what the list already read (Team, ViewContext), so a list of teams reads the caller and the users once. *@
+
+@if (_standalone)
+{
+    @* The current-user row highlight, applied to the cells (not the row) so Radzen's own cell backgrounds do not paint over
+       it. TeamComponent carries the same rule for the views it draws, so it is written once per page, not once per team. *@
+    <style>
+        tr[data-tharga-current-member] > td {
+            background-color: rgba(37, 99, 235, 0.16) !important;
+        }
+
+        tr[data-tharga-current-member] > td:first-child {
+            box-shadow: inset 3px 0 0 0 var(--rz-primary, #2563eb);
+        }
+    </style>
+}
+
+@if (!_loaded)
+{
+    <Loading />
+}
+else if (_team == null)
+{
+    <RadzenText data-no-team>@_ctx.Text[TeamComponentText.NoTeams]</RadzenText>
+}
+else
+{
+    @if (ShowHeader)
+    {
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.Right" AlignItems="AlignItems.End" Gap="0.75rem" Wrap="FlexWrap.Wrap" data-team-header>
+            <TeamConsentControl TMember="TMember" Team="@_team" ViewContext="@_ctx" ShowLabel="true" Changed="@NotifyChangedAsync" />
+            <TeamActionsMenu TMember="TMember" Team="@_team" ViewContext="@_ctx" Changed="@NotifyChangedAsync" />
+        </RadzenStack>
+    }
+    <TeamAccessRequestPanel Team="@_team"
+                            CanDecide="@TeamAccessRequestGate.CanDecide(_ctx.HasManageScope, _ctx.SelectedTeam?.Key, _team.Key, _ctx.IsMemberOf(_team))"
+                            MyPendingRequest="@TeamAccessRequestGate.PendingOn(_ctx.MyAccessRequests, _team.Key)"
+                            Changed="@NotifyChangedAsync" />
+    <RadzenRow>
+        <RadzenColumn>
+            <RadzenDataGrid Data="@_team.Members" TItem="TMember" RowRender="@OnMemberRowRender">
+                <Columns>
+                    <RadzenDataGridColumn Title="@_ctx.Text[TeamComponentText.ColumnEmail]" SortOrder="SortOrder.Ascending">
+                        <Template>
+                            @{
+                                var user = _ctx.Users.FirstOrDefault(x => x.Key == context.Key);
+                                <span style="margin-right: 6px;"><UserAvatar User="user" EMail="@(context.Invitation?.EMail ?? user?.EMail)" Name="@context.Name" Size="32px" /></span>
+                                @(context.Invitation?.EMail ?? user?.EMail)
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="@_ctx.Text[TeamComponentText.ColumnName]" Property="@nameof(ITeamMember.Name)">
+                        <Template>
+                            @{
+                                var canEditThisRow = EnableMemberNameEdit && _ctx.CanManageMembersOn(_team);
+                            }
+                            @if (canEditThisRow && !string.IsNullOrEmpty(_editingMemberKey) && _editingMemberKey == context.Key)
+                            {
+                                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.25rem"
+                                             Style="min-width: 0; flex-wrap: nowrap;">
+                                    <RadzenTextBox Value="@_editingMemberName"
+                                                   ValueChanged="@(v => _editingMemberName = v)"
+                                                   Style="flex: 1 1 0; min-width: 0;" />
+                                    <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Small"
+                                                  Click="@(() => SaveMemberName(context))"
+                                                  Style="flex: 0 0 auto;" />
+                                    @if (!string.IsNullOrEmpty(context.Name))
+                                    {
+                                        <RadzenButton Icon="restart_alt" ButtonStyle="ButtonStyle.Warning" Variant="Variant.Flat" Size="ButtonSize.Small"
+                                                      Click="@(() => ResetMemberName(context))"
+                                                      title="@_ctx.Text[TeamComponentText.ClearNameOverride]"
+                                                      Style="flex: 0 0 auto;" />
+                                    }
+                                    <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Small"
+                                                  Click="@CancelMemberNameEdit"
+                                                  Style="flex: 0 0 auto;" />
+                                </RadzenStack>
+                            }
+                            else
+                            {
+                                var member = context;
+                                var user = _ctx.Users.FirstOrDefault(x => x.Key == member.Key);
+                                var displayName = !string.IsNullOrEmpty(member.Name)
+                                    ? member.Name
+                                    : user?.Name ?? TeamServiceBase.ResolveDisplayName(user);
+                                var hasOverride = !string.IsNullOrEmpty(member.Name)
+                                                  && !string.IsNullOrEmpty(user?.Name)
+                                                  && member.Name != user.Name;
+                                var tooltip = hasOverride
+                                    ? _ctx.Text.Format(TeamComponentText.NameOverrideTooltip, user.Name)
+                                    : null;
+
+                                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.25rem">
+                                    <span title="@tooltip" style="@(hasOverride ? "font-style: italic;" : "")">@displayName</span>
+                                    @if (canEditThisRow)
+                                    {
+                                        <RadzenButton Icon="edit" Variant="Variant.Text" Size="ButtonSize.Small"
+                                                      Click="@(() => StartMemberNameEdit(member))"
+                                                      title="@_ctx.Text[TeamComponentText.EditDisplayName]" />
+                                    }
+                                </RadzenStack>
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="@_ctx.Text[TeamComponentText.ColumnAccessLevel]" Property="@nameof(ITeamMember.AccessLevel)">
+                        <Template>
+                            @if (_ctx.User.Key == context.Key || context.AccessLevel == AccessLevel.Owner) //Cannot change self or owner.
+                            {
+                                <RadzenText>@(context.AccessLevel?.ToString() ?? _ctx.Text[TeamComponentText.NoAccessLevel])</RadzenText>
+                            }
+                            else if (_ctx.CanManageMembersOn(_team))
+                            {
+                                // Custom hidden until #76 adds member scope/role editing (see InviteUserDialog).
+                                // Nullable so a member with no level shows the placeholder and can be given one;
+                                // there is no clearing back to null, which would be a way to strip access silently.
+                                var accessLevels = _ctx.MemberAccessLevels;
+                                <RadzenDropDown TValue="AccessLevel?" Value="@context.AccessLevel" Data="@accessLevels"
+                                                Placeholder="@_ctx.Text[TeamComponentText.NoAccessLevel]"
+                                                ValueChanged="@(async x => { if (x is { } level) await ChangeRole(context.Key, level); })" />
+                            }
+                            else
+                            {
+                                <RadzenText>@(context.AccessLevel?.ToString() ?? _ctx.Text[TeamComponentText.NoAccessLevel])</RadzenText>
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="@_ctx.Text[TeamComponentText.ColumnRoles]" Width="200px" Visible="@RolePickerGate.ShowRoles(ShowRoles, _ctx.GetVisibleRoles(_team.Key))">
+                        <Template>
+                            @if (_ctx.CanManageMembersOn(_team) && _ctx.User.Key != context.Key && context.AccessLevel != AccessLevel.Owner)
+                            {
+                                <RoleEditor Roles="@_ctx.GetVisibleRoles(_team.Key)"
+                                            Selected="@(context.TenantRoles ?? Array.Empty<string>())"
+                                            SelectedChanged="@(r => ChangeTenantRoles(context.Key, r))" />
+                            }
+                            else
+                            {
+                                <RadzenText>@(string.Join(", ", context.TenantRoles ?? Array.Empty<string>()))</RadzenText>
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="@_ctx.Text[TeamComponentText.ColumnScopeOverrides]" Width="200px" Visible="@(ShowScopeOverrides && _ctx.ScopeRegistry != null)">
+                        <Template>
+                            @if (_ctx.CanManageMembersOn(_team) && _ctx.User.Key != context.Key && context.AccessLevel != AccessLevel.Owner)
+                            {
+                                <ScopeOverrideEditor AllScopes="_ctx.AllScopeNames"
+                                                     Descriptions="_ctx.ScopeDescriptions"
+                                                     InheritedScopes="@_ctx.ScopeRegistry.GetEffectiveScopes(context.AccessLevel, context.TenantRoles, null)"
+                                                     Overrides="@(context.ScopeOverrides ?? Array.Empty<string>())"
+                                                     HiddenScopes="@_ctx.GetHiddenScopes(_team.Key)"
+                                                     OverridesChanged="@(o => ChangeScopeOverrides(context.Key, o))" />
+                            }
+                            else
+                            {
+                                <RadzenText>@(string.Join(", ", (context.ScopeOverrides ?? Array.Empty<string>()).Where(s => !_ctx.GetHiddenScopes(_team.Key).Contains(s))))</RadzenText>
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="@_ctx.Text[TeamComponentText.ColumnScopes]" Width="80px" Visible="@(_ctx.ScopeRegistry != null && ShowScopeTooltip)">
+                        <Template>
+                            <span title="@GetEffectiveScopesWithOriginText(context)">
+                                <RadzenIcon Icon="info" Style="cursor: help;" />
+                            </span>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="@_ctx.Text[TeamComponentText.ColumnStatus]" Property="@nameof(ITeamMember.State)">
+                        <Template>
+                            @if (context.State == MembershipState.Invited && context.Invitation != null)
+                            {
+                                <span title="@_ctx.Text.Format(TeamComponentText.InvitedAt, context.Invitation.InviteTime.ToString("yyyy-MM-dd HH:mm"))" style="cursor: help;">@context.State</span>
+                            }
+                            else
+                            {
+                                <span>@context.State</span>
+                            }
+                            @* Shown beside the state, not instead of it. Suspension deliberately
+                               leaves State at Member -- that is what keeps the team in the
+                               member's selector -- so the row has to say both things or it
+                               misdescribes what was done. *@
+                            @if (context.SuspendedAt != null)
+                            {
+                                <RadzenBadge BadgeStyle="BadgeStyle.Warning" Variant="Variant.Flat"
+                                             Text="@_ctx.Text[TeamComponentText.Suspended]" class="rz-ml-2"
+                                             title="@SuspendedMemberTitle(context)" />
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="@_ctx.Text[TeamComponentText.ColumnLastSeen]" Property="@nameof(ITeamMember.LastSeen)">
+                        <Template>
+                            <DateTimeView Date="@context.LastSeen"/>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    @MemberColumns
+                    @* Sized for the widest built-in action, "Copy invitation link" with its menu
+                       arrow, and matched to the team grid's actions column. Unsized, it took an equal
+                       share of the row and clipped that split button. *@
+                    <RadzenDataGridColumn Width="240px">
+                        <Template>
+                            @{
+                                var memberActions = MemberActions(context);
+                            }
+                            @* Same Text/Icon/style as the split button's primary half, so a
+                               member with one available action does not look like a
+                               different kind of control from the member beside them. *@
+                            @if (memberActions.Count == 1 && MemberActionItems == null)
+                            {
+                                <RadzenButton Text="@memberActions[0].Text" Icon="@memberActions[0].Icon"
+                                              ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                              Click="@(() => InvokeMemberActionAsync(memberActions[0].Value, context))"/>
+                            }
+                            else if (memberActions.Count > 0)
+                            {
+                                <RadzenSplitButton Text="@memberActions[0].Text" Icon="@memberActions[0].Icon"
+                                                   ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                                   Click="@(item => OnMemberActionAsync(item, context, memberActions[0].Value))">
+                                    <ChildContent>
+                                        @foreach (var action in memberActions.Skip(1))
+                                        {
+                                            <RadzenSplitButtonItem Text="@action.Text" Value="@action.Value" Icon="@action.Icon"/>
+                                        }
+                                        @MemberActionItems
+                                    </ChildContent>
+                                </RadzenSplitButton>
+                            }
+                            else if (MemberActionItems != null)
+                            {
+                                @* A member the caller can act on in no built-in way -- their own row,
+                                   or the owner's -- still has to carry a host's action. Icon-only,
+                                   because the primary half would otherwise have to invent a label for
+                                   a menu whose contents the toolkit does not know. *@
+                                <RadzenSplitButton Icon="more_vert" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                                   Click="@(item => OnMemberActionAsync(item, context, null))">
+                                    <ChildContent>
+                                        @MemberActionItems
+                                    </ChildContent>
+                                </RadzenSplitButton>
+                            }
+                            @MemberActionsTemplate?.Invoke(context)
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        </RadzenColumn>
+    </RadzenRow>
+}
+
+@code {
+    /// <summary>The team to show; the selected team when not set.</summary>
+    [Parameter] public string TeamKey { get; set; }
+
+    /// <summary>
+    /// Whether the team's consent selector and its actions (invite, icon, rename, transfer, request access, leave, delete) are
+    /// drawn above the members. Default true. <c>TeamComponent</c> sets it false because it draws them itself, in its own layout.
+    /// </summary>
+    [Parameter] public bool ShowHeader { get; set; } = true;
+
+    /// <summary>
+    /// When true, callers with the <c>team:manage</c> scope can inline-edit a member's display name (Member.Name) via a pencil
+    /// icon. When false (default), the Name column is read-only.
+    /// </summary>
+    [Parameter] public bool EnableMemberNameEdit { get; set; }
+
+    /// <summary>
+    /// Optional callback invoked after a successful inline edit of <see cref="ITeamMember.Name"/>. Tharga.Team handles the
+    /// persistence itself; this is purely observational.
+    /// </summary>
+    [Parameter] public EventCallback<MemberNameChangedArgs> OnMemberNameChanged { get; set; }
+
+    /// <summary>When true (and an <see cref="IScopeRegistry"/> is registered), shows the per-member effective-scope (i) tooltip. Default true.</summary>
+    [Parameter] public bool ShowScopeTooltip { get; set; } = true;
+
+    /// <summary>When true (and an <see cref="IScopeRegistry"/> is registered), shows the per-member scope-override editor column. Default false.</summary>
+    [Parameter] public bool ShowScopeOverrides { get; set; }
+
+    /// <summary>When true (and an <see cref="ITenantRoleRegistry"/> is registered), shows the per-member tenant-role editor column. Default false.</summary>
+    [Parameter] public bool ShowRoles { get; set; }
+
+    /// <summary>
+    /// Show a per-member action opening the audit log for that member, scoped to this team. Off by default: the log is only
+    /// queryable when audit storage is configured, and the action is hidden regardless for callers without <c>audit:read</c>.
+    /// </summary>
+    [Parameter] public bool ShowAuditLogButton { get; set; }
+
+    /// <summary>Optional template rendered beside the built-in action control on each member row.</summary>
+    /// <remarks>Use this to place a control <i>next to</i> the member's action button, and <see cref="MemberActionItems"/> to put one <i>inside</i> its menu.</remarks>
+    [Parameter] public RenderFragment<TMember> MemberActionsTemplate { get; set; }
+
+    /// <summary>
+    /// Optional extra items for each member row's split-button dropdown (supply <c>RadzenSplitButtonItem</c> components).
+    /// Clicks arrive via <see cref="MemberActionInvoked"/>.
+    /// </summary>
+    /// <remarks>An item whose <c>Value</c> matches one the component owns is handled as that built-in rather than forwarded; see <c>MemberActionValues</c> for the names to avoid.</remarks>
+    [Parameter] public RenderFragment MemberActionItems { get; set; }
+
+    /// <summary>Raised when a consumer-supplied split-button item (<see cref="MemberActionItems"/>) is clicked.</summary>
+    [Parameter] public EventCallback<MemberRowAction<TMember>> MemberActionInvoked { get; set; }
+
+    /// <summary>
+    /// Optional extra columns appended to the member grid, after the built-in ones and before the action column. Supply
+    /// <c>RadzenDataGridColumn</c> components.
+    /// </summary>
+    [Parameter] public RenderFragment MemberColumns { get; set; }
+
+    /// <summary>The team to show, already read. Set by <c>TeamComponent</c>; a host sets <see cref="TeamKey"/> instead.</summary>
+    [Parameter, EditorBrowsable(EditorBrowsableState.Never)] public ITeam<TMember> Team { get; set; }
+
+    /// <summary>What <c>TeamComponent</c> already read, shared with the team's members. A host leaves it unset.</summary>
+    [Parameter, EditorBrowsable(EditorBrowsableState.Never)] public TeamViewContext ViewContext { get; set; }
+
+    /// <summary>Raised after a change, so <c>TeamComponent</c> can read its teams again. Used alone, the view reads its team again itself.</summary>
+    [Parameter, EditorBrowsable(EditorBrowsableState.Never)] public EventCallback Changed { get; set; }
+
+    private ITeam<TMember> _team;
+    private TeamViewContext _ctx;
+    private bool _standalone;
+    private bool _loaded;
+    private string _loadedFor;
+    private string _editingMemberKey;
+    private string _editingMemberName;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Team != null && ViewContext != null)
+        {
+            _standalone = false;
+            _team = Team;
+            _ctx = ViewContext;
+            _loaded = true;
+            return;
+        }
+
+        _standalone = true;
+        if (_loaded && _loadedFor == TeamKey) return;
+
+        _loadedFor = TeamKey;
+        await ReloadAsync();
+    }
+
+    /// <summary>Used alone: reads the caller, the users and the team, the way the team list does.</summary>
+    private async Task ReloadAsync()
+    {
+        _ctx ??= await TeamViewContext.LoadAsync(ServiceProvider);
+        await _ctx.RefreshSelectedAsync(ServiceProvider);
+
+        var key = string.IsNullOrWhiteSpace(TeamKey) ? _ctx.SelectedTeam?.Key : TeamKey;
+        var teams = _ctx.CanSeeAllTeams
+            ? await TeamOversightService.GetAllTeamsAsync<TMember>().ToArrayAsync()
+            : await TeamDirectoryService.GetTeamsAsync<TMember>().ToArrayAsync();
+        _team = key == null ? null : teams.FirstOrDefault(x => x.Key == key);
+
+        await _ctx.RefreshTeamsAsync(ServiceProvider, _team == null ? [] : [_team]);
+        _loaded = true;
+    }
+
+    private Task NotifyChangedAsync() => Changed.HasDelegate ? Changed.InvokeAsync() : ReloadAsync();
+
+    private string GetEffectiveScopesWithOriginText(TMember member)
+    {
+        if (_ctx.ScopeRegistry == null) return "";
+
+        var roleNames = member.TenantRoles ?? Array.Empty<string>();
+        var accessLevelScopes = _ctx.ScopeRegistry.GetScopesForAccessLevel(member.AccessLevel);
+        var codeRoleScopes = _ctx.TenantRoleRegistry?.GetScopesForRoles(roleNames)
+            ?? (IReadOnlyList<string>)Array.Empty<string>();
+        var customRoleScopes = (_ctx.TenantRoleService != null ? _team.CustomRoles ?? [] : [])
+            .Where(r => roleNames.Contains(r.Name))
+            .SelectMany(r => r.Scopes ?? []);
+        var roleScopes = codeRoleScopes.Concat(customRoleScopes).ToHashSet(StringComparer.Ordinal);
+        var overrides = member.ScopeOverrides ?? Array.Empty<string>();
+
+        var hidden = _ctx.GetHiddenScopes(_team.Key);
+        var allScopes = accessLevelScopes.Concat(roleScopes).Concat(overrides).Distinct().Where(s => !hidden.Contains(s));
+        var lines = new List<string>();
+        foreach (var scope in allScopes.OrderBy(s => s, StringComparer.Ordinal))
+        {
+            var origin = overrides.Contains(scope) ? "override"
+                : roleScopes.Contains(scope) ? "role"
+                : "access level";
+            lines.Add($"{scope} ({origin})");
+        }
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>Finds the member a row action is for, by the key of the user or the member; tells the caller when there is none.</summary>
+    private (IUser User, TMember Member) FindMember(string userKey)
+    {
+        var user = _ctx.Users.FirstOrDefault(x => x.Key == userKey || x.Identity == userKey);
+        var lookupKey = user?.Key ?? userKey;
+        var member = _team.Members.PickOneOrDefault(x => x.Key == lookupKey, Logger, _team.Key, lookupKey);
+        if (member == null)
+        {
+            NotificationService.Notify(NotificationSeverity.Warning, _ctx.Text[TeamComponentText.MemberNotFound], _ctx.Text[TeamComponentText.MemberNotFoundDetail]);
+        }
+
+        return (user, member);
+    }
+
+    private async Task ChangeTenantRoles(string userKey, IEnumerable<string> roles)
+    {
+        var (_, member) = FindMember(userKey);
+        if (member == null) return;
+
+        await TeamManagementService.SetMemberTenantRolesAsync(_team.Key, member.Key, roles.ToArray());
+        await NotifyChangedAsync();
+    }
+
+    private async Task ChangeScopeOverrides(string userKey, IEnumerable<string> scopes)
+    {
+        var (_, member) = FindMember(userKey);
+        if (member == null) return;
+
+        await TeamManagementService.SetMemberScopeOverridesAsync(_team.Key, member.Key, scopes.ToArray());
+        await NotifyChangedAsync();
+    }
+
+    private async Task ChangeRole(string userKey, AccessLevel accessLevel)
+    {
+        var (_, member) = FindMember(userKey);
+        if (member == null) return;
+
+        await TeamManagementService.SetMemberRoleAsync(_team.Key, member.Key, accessLevel);
+        await NotifyChangedAsync();
+    }
+
+    private async Task RemoveUserFromTeam(string userKey)
+    {
+        var (user, member) = FindMember(userKey);
+        if (member == null) return;
+
+        var email = member.Invitation?.EMail ?? user?.EMail;
+        var response = await DialogService.Confirm(_ctx.Text.Format(TeamComponentText.ConfirmRemoveMember, email, _team.Name));
+        if (response != true) return;
+
+        await TeamManagementService.RemoveMemberAsync(_team.Key, member.Key);
+        await NotifyChangedAsync();
+    }
+
+    private void StartMemberNameEdit(TMember member)
+    {
+        _editingMemberKey = member.Key;
+        _editingMemberName = member.Name ?? ResolveDefaultMemberName(member);
+    }
+
+    private void CancelMemberNameEdit()
+    {
+        _editingMemberKey = null;
+        _editingMemberName = null;
+    }
+
+    private string ResolveDefaultMemberName(TMember member)
+    {
+        var user = _ctx.Users.FirstOrDefault(x => x.Key == member.Key);
+        return user?.Name ?? TeamServiceBase.ResolveDisplayName(user);
+    }
+
+    private async Task SaveMemberName(TMember member)
+    {
+        var oldName = member.Name;
+
+        // Per-team override only: the root IUser.Name belongs to the user's profile page and to user administration, and
+        // must not be reachable from a member row. See MemberNamePolicy.
+        var newName = MemberNamePolicy.ResolveOverride(_editingMemberName, ResolveDefaultMemberName(member));
+
+        if (newName == oldName)
+        {
+            CancelMemberNameEdit();
+            return;
+        }
+
+        var teamKey = _team.Key;
+        await TeamManagementService.SetMemberNameAsync(teamKey, member.Key, newName);
+        CancelMemberNameEdit();
+        await NotifyChangedAsync();
+
+        if (OnMemberNameChanged.HasDelegate)
+        {
+            await OnMemberNameChanged.InvokeAsync(new MemberNameChangedArgs(teamKey, member.Key, oldName, newName));
+        }
+    }
+
+    private async Task ResetMemberName(TMember member)
+    {
+        var oldName = member.Name;
+        if (oldName == null)
+        {
+            CancelMemberNameEdit();
+            return;
+        }
+
+        var teamKey = _team.Key;
+        await TeamManagementService.SetMemberNameAsync(teamKey, member.Key, null);
+        CancelMemberNameEdit();
+        await NotifyChangedAsync();
+
+        if (OnMemberNameChanged.HasDelegate)
+        {
+            await OnMemberNameChanged.InvokeAsync(new MemberNameChangedArgs(teamKey, member.Key, oldName, null));
+        }
+    }
+
+    private void OnMemberRowRender(RowRenderEventArgs<TMember> args)
+    {
+        if (MemberHighlight.IsCurrentMember(args.Data?.Key, _ctx.User?.Key))
+        {
+            // Marker attribute only: the tint must be applied to the cells (see the style block above). Radzen's cells carry
+            // their own background and would paint over a background set on the row, so a row-level style is invisible.
+            args.Attributes["data-tharga-current-member"] = "true";
+        }
+    }
+
+    /// <remarks>
+    /// One whole sentence per variant rather than a head with an optional actor clause appended. That clause moves in other
+    /// languages, so a sentence built from two halves cannot be translated.
+    /// </remarks>
+    private string SuspendedMemberTitle(TMember member)
+    {
+        var when = member.SuspendedAt?.ToString("yyyy-MM-dd HH:mm");
+        var hasActor = !string.IsNullOrEmpty(member.SuspendedBy);
+        return _ctx.Text.Format(hasActor ? TeamComponentText.SuspendedByTooltip : TeamComponentText.SuspendedTooltip, when, member.SuspendedBy);
+    }
+
+    /// <summary>
+    /// Row actions for one member, in the order they collapse: the first is the primary button, the rest go in the dropdown.
+    /// Built as a list rather than three conditional buttons so a member with several available actions gets one split button
+    /// instead of a row of icons.
+    /// </summary>
+    /// <remarks>
+    /// Only suspension is confirmed; restoring is the reversible direction, and confirming it teaches people to click through
+    /// the dialog that matters.
+    /// </remarks>
+    private List<(string Value, string Text, string Icon)> MemberActions(TMember member)
+    {
+        var text = _ctx.Text;
+        var actions = new List<(string, string, string)>();
+        if (_ctx.CanManageMembersOn(_team) && member.Invitation != null) actions.Add((MemberActionValues.CopyInvite, text[TeamComponentText.ActionCopyInviteLink], "link"));
+        if (ShowAuditLogButton && _ctx.CanReadMemberAudit(_team)) actions.Add((MemberActionValues.MemberAudit, text[TeamComponentText.ActionAuditLog], "manage_search"));
+        if (_ctx.CanManageMembersOn(_team) && _ctx.User.Key != member.Key && member.AccessLevel != AccessLevel.Owner)
+        {
+            // Suspension needs access to take away, and an invitation that has not been accepted grants none -- the right
+            // action there is to withdraw the invitation, which Remove already does. Offering it anyway is how this shipped
+            // first, and the service could only report the person as not being in the team at all.
+            if (member.State is null or MembershipState.Member)
+            {
+                // Otherwise the same conditions as Remove, for the same reasons: member:manage, never your own row, never the
+                // owner. The service refuses all of them regardless.
+                actions.Add(member.SuspendedAt != null
+                    ? (MemberActionValues.RestoreMember, text[TeamComponentText.ActionRestoreAccess], "play_circle")
+                    : (MemberActionValues.SuspendMember, text[TeamComponentText.ActionSuspendAccess], "block"));
+            }
+            actions.Add((MemberActionValues.RemoveMember, text[TeamComponentText.ActionRemoveMember], "remove"));
+        }
+        return actions;
+    }
+
+    private Task OnMemberActionAsync(RadzenSplitButtonItem item, TMember member, string defaultValue)
+        => InvokeMemberActionAsync(item?.Value ?? defaultValue, member);
+
+    private async Task InvokeMemberActionAsync(string value, TMember member)
+    {
+        // The icon-only button rendered for a row with no built-in actions has no primary action: its left half is the
+        // menu's handle, not a command. Clicking it must do nothing rather than raise MemberActionInvoked with a null action.
+        if (string.IsNullOrEmpty(value)) return;
+
+        // Anything the component does not own came from MemberActionItems and belongs to the host.
+        if (!MemberActionValues.IsBuiltIn(value))
+        {
+            await MemberActionInvoked.InvokeAsync(new MemberRowAction<TMember>(value, member));
+            return;
+        }
+
+        var memberKey = member.Key;
+        switch (value)
+        {
+            case MemberActionValues.CopyInvite: await CopyInvitationLink(memberKey); break;
+            case MemberActionValues.MemberAudit: await OpenMemberAuditLogAsync(memberKey); break;
+            case MemberActionValues.RemoveMember: await RemoveUserFromTeam(memberKey); break;
+            case MemberActionValues.SuspendMember: await SetMemberSuspendedAsync(memberKey, true); break;
+            case MemberActionValues.RestoreMember: await SetMemberSuspendedAsync(memberKey, false); break;
+        }
+    }
+
+    private async Task SetMemberSuspendedAsync(string memberKey, bool suspended)
+    {
+        if (suspended)
+        {
+            var confirmed = await DialogService.Confirm(
+                _ctx.Text[TeamComponentText.ConfirmSuspendDetail],
+                _ctx.Text[TeamComponentText.ConfirmSuspendTitle]);
+            if (confirmed != true) return;
+        }
+
+        try
+        {
+            await TeamManagementService.SetMemberSuspendedAsync(_team.Key, memberKey, suspended);
+            await NotifyChangedAsync();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(NotificationSeverity.Error,
+                _ctx.Text[suspended ? TeamComponentText.CouldNotSuspend : TeamComponentText.CouldNotRestore], ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Opens the audit log for one member, scoped to what they did <i>in this team</i>. Pinning both the caller and the team is
+    /// what keeps a team administrator's view inside their own tenant, the same boundary the <c>audit:read</c> team grant
+    /// already enforces server-side.
+    /// </summary>
+    private async Task OpenMemberAuditLogAsync(string memberKey)
+    {
+        var user = _ctx.Users.FirstOrDefault(x => x.Key == memberKey);
+        var identity = user?.EMail ?? user?.Name ?? memberKey;
+
+        // Pinned on the subject rather than the display string: an exact match, where CallerIdentity is a substring match
+        // against whichever claim the identity provider happened to emit.
+        var pinned = new Tharga.Team.Blazor.Features.Audit.AuditPinnedFilter
+        {
+            CallerUserIdentity = user?.Identity,
+            TeamKey = _team.Key
+        };
+
+        // Fully qualified deliberately. Razor resolves a component tag by @using or by full name only: it does not walk
+        // enclosing namespaces the way C# does, so a partially-qualified tag compiles clean and renders as an unknown HTML
+        // element: an empty dialog, no exception, no log.
+        await DialogService.OpenAsync(_ctx.Text.Format(TeamComponentText.AuditLogTitle, identity), _ =>
+            @<Tharga.Team.Blazor.Features.Audit.AuditLogView PinnedFilter="@pinned" />,
+            new DialogOptions { Width = "90vw", Height = "85vh", Resizable = true, Draggable = true });
+    }
+
+    private async Task CopyInvitationLink(string userKey)
+    {
+        var member = _team.Members.PickOneOrDefault(x => x.Key == userKey, Logger, _team.Key, userKey);
+        if (member?.Invitation == null) return;
+
+        var link = TeamInviteLink.Build(NavigationManager.BaseUri, BlazorOptions.Value.InvitePath, member.Invitation.InviteKey);
+
+        if (!await Js.TryCopyToClipboardAsync(link)) return;
+
+        NotificationService.Notify(new NotificationMessage
+        {
+            Summary = _ctx.Text[TeamComponentText.InviteLinkCopied]
+        });
+    }
+}

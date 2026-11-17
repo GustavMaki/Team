@@ -36,7 +36,7 @@ public class InviteMailCallSiteTests
     [Fact]
     public void TheScanFindsTheInvitationCall()
     {
-        Assert.Contains(Calls(), x => x.File.EndsWith("TeamComponent.razor", StringComparison.Ordinal));
+        Assert.Contains(Calls(), x => x.File.EndsWith("TeamActionsMenu.razor", StringComparison.Ordinal));
     }
 
     [Fact]

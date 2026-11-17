@@ -76,7 +76,7 @@ public class GrantOnlyScopePickerTests : BunitContext
     {
         var sources = new[]
         {
-            "Features/Team/TeamComponent.razor",
+            "Features/Team/TeamViewContext.cs",
             "Features/Api/ApiKeyView.razor",
             "Features/Roles/TenantRoleManager.razor",
         };
@@ -87,10 +87,10 @@ public class GrantOnlyScopePickerTests : BunitContext
         {
             var path = ResolveSourcePath(relative);
             var source = File.ReadAllText(path);
-            var assignments = Regex.Matches(source, @"_allScopeNames\s*=\s*_scopeRegistry[^;]*;");
+            var assignments = Regex.Matches(source, @"(?:_allScopeNames|AllScopeNames)\s*=\s*(?:_scopeRegistry|context\.ScopeRegistry)[^;]*;");
 
             Assert.True(assignments.Count > 0,
-                $"{relative} no longer assigns _allScopeNames from _scopeRegistry — this scan has gone blind and needs updating.");
+                $"{relative} no longer assigns the scope names from the scope registry — this scan has gone blind and needs updating.");
 
             foreach (Match assignment in assignments)
             {

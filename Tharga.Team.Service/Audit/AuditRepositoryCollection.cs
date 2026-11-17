@@ -101,6 +101,10 @@ internal class AuditRepositoryCollection : DiskRepositoryCollectionBase<AuditEnt
     });
 
     /// <summary>The page of units of work: matching entries grouped by correlation id, ordered by when each began.</summary>
+    /// <param name="filter">Which entries to group.</param>
+    /// <param name="skip">How many units of work to skip.</param>
+    /// <param name="take">How many units of work to return.</param>
+    /// <param name="newestFirst">Whether the most recently begun unit of work comes first.</param>
     /// <param name="emptyCorrelation">What an entry with no correlation id holds; the driver's own value unless a test stands one in.</param>
     internal static PipelineDefinition<AuditEntryEntity, GroupRow> GroupPage(FilterDefinition<AuditEntryEntity> filter, int skip, int take, bool newestFirst, BsonValue emptyCorrelation = null)
     {
