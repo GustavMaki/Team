@@ -1,0 +1,430 @@
+@using Tharga.Team.Blazor.Framework
+@using Tharga.Blazor
+@inject IPlatformAiCatalogueService Catalogue
+@inject NotificationService NotificationService
+
+@* The platform's AI catalogue: the providers the platform has accounts with, and the models teams may choose from, with their
+   prices and where they run. Needs the support:aicatalogue:manage system scope. A key is typed, sent and cleared; nothing here
+   reads one back. *@
+
+@if (!_ready)
+{
+    <Loading />
+}
+else if (!_permitted)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Info" ShowIcon="true" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @_text[PlatformAiCatalogueViewText.NotPermitted]
+    </RadzenAlert>
+}
+else
+{
+    <RadzenStack Orientation="Orientation.Vertical" Gap="1.5rem">
+        <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" data-providers>
+            <RadzenText TextStyle="TextStyle.H6" class="rz-m-0">@_text[PlatformAiCatalogueViewText.ProvidersTitle]</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0">@_text[PlatformAiCatalogueViewText.ProvidersExplanation]</RadzenText>
+            @if (_catalogue.ChangedAt is { } changedAt)
+            {
+                <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0">@_text.Format(PlatformAiCatalogueViewText.ChangedBy, _catalogue.ChangedBy, changedAt.ToLocalTime().ToString("g"))</RadzenText>
+            }
+
+            @if (_catalogue.Providers.Length == 0)
+            {
+                <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0" data-no-providers>@_text[PlatformAiCatalogueViewText.NoProviders]</RadzenText>
+            }
+            else
+            {
+                <div style="overflow-x: auto;">
+                    <table class="rz-grid-table rz-grid-table-fixed">
+                        <thead>
+                            <tr>
+                                <th>@_text[PlatformAiCatalogueViewText.Name]</th>
+                                <th>@_text[PlatformAiCatalogueViewText.Kind]</th>
+                                <th>@_text[PlatformAiCatalogueViewText.Address]</th>
+                                <th>@_text[PlatformAiCatalogueViewText.ApiKey]</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var provider in _catalogue.Providers)
+                            {
+                                <tr data-provider-row>
+                                    <td>@provider.Name</td>
+                                    <td>@provider.Kind</td>
+                                    <td>@provider.BaseAddress</td>
+                                    <td>@(provider.HasApiKey ? _text[PlatformAiCatalogueViewText.HasKey] : _text[PlatformAiCatalogueViewText.NoKey])</td>
+                                    <td style="text-align: end; white-space: nowrap;">
+                                        <RadzenButton Text="@_text[PlatformAiCatalogueViewText.Edit]" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => EditProvider(provider))" Disabled="_busy" />
+                                        <RadzenButton Text="@_text[PlatformAiCatalogueViewText.Remove]" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => RemoveProviderAsync(provider))" Disabled="_busy" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-m-0">@(_providerId == null ? _text[PlatformAiCatalogueViewText.NewProvider] : _providerName)</RadzenText>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Wrap="FlexWrap.Wrap" AlignItems="AlignItems.Start">
+                <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.Name]" Variant="Variant.Outlined">
+                    <RadzenTextBox @bind-Value="_providerName" Disabled="_busy" data-provider-name />
+                </RadzenFormField>
+                <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.Kind]" Variant="Variant.Outlined">
+                    <RadzenDropDown TValue="SupportAiConnectionKind" Data="_kinds" @bind-Value="_providerKind" Disabled="_busy" Style="min-width: 10rem;" data-provider-kind />
+                </RadzenFormField>
+                <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.Address]" Variant="Variant.Outlined">
+                    <RadzenTextBox @bind-Value="_providerAddress" Disabled="_busy" Style="min-width: 18rem;" data-provider-address />
+                </RadzenFormField>
+                <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.ApiKey]" Variant="Variant.Outlined">
+                    <ChildContent>
+                        <RadzenPassword @bind-Value="_providerKey" Disabled="_busy" AutoCompleteType="AutoCompleteType.Off" data-provider-key />
+                    </ChildContent>
+                    <Helper>
+                        @if (_providerHasKey)
+                        {
+                            <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0">@_text[PlatformAiCatalogueViewText.ApiKeyStored]</RadzenText>
+                        }
+                    </Helper>
+                </RadzenFormField>
+                <RadzenButton Text="@_text[PlatformAiCatalogueViewText.SaveProvider]" Icon="save" Click="SaveProviderAsync" Disabled="_busy" data-save-provider />
+            </RadzenStack>
+        </RadzenStack>
+
+        <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem" data-models>
+            <RadzenText TextStyle="TextStyle.H6" class="rz-m-0">@_text[PlatformAiCatalogueViewText.ModelsTitle]</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0">@_text[PlatformAiCatalogueViewText.ModelsExplanation]</RadzenText>
+
+            @if (_catalogue.Models.Length == 0)
+            {
+                <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0" data-no-models>@_text[PlatformAiCatalogueViewText.NoModels]</RadzenText>
+            }
+            else
+            {
+                <div style="overflow-x: auto;">
+                    <table class="rz-grid-table rz-grid-table-fixed">
+                        <thead>
+                            <tr>
+                                <th>@_text[PlatformAiCatalogueViewText.DisplayName]</th>
+                                <th>@_text[PlatformAiCatalogueViewText.Provider]</th>
+                                <th>@_text[PlatformAiCatalogueViewText.ProcessedIn]</th>
+                                <th style="text-align: end;">@_text[PlatformAiCatalogueViewText.PriceInput]</th>
+                                <th style="text-align: end;">@_text[PlatformAiCatalogueViewText.PriceCachedInput]</th>
+                                <th style="text-align: end;">@_text[PlatformAiCatalogueViewText.PriceOutput]</th>
+                                <th>@_text[PlatformAiCatalogueViewText.Offered]</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var model in _catalogue.Models)
+                            {
+                                <tr data-model-row>
+                                    <td>@model.DisplayName @(model.Id == _catalogue.DefaultModelId ? $"({_text[PlatformAiCatalogueViewText.Default]})" : "")</td>
+                                    <td>@ProviderName(model.ProviderId)</td>
+                                    <td>@model.ProcessedIn</td>
+                                    <td style="text-align: end;">@Price(model.PriceInput, model)</td>
+                                    <td style="text-align: end;">@Price(model.PriceCachedInput, model)</td>
+                                    <td style="text-align: end;">@Price(model.PriceOutput, model)</td>
+                                    <td>@(model.Offered ? "✓" : "")</td>
+                                    <td style="text-align: end; white-space: nowrap;">
+                                        <RadzenButton Text="@_text[PlatformAiCatalogueViewText.Edit]" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => EditModel(model))" Disabled="_busy" />
+                                        @if (model.Offered && model.Id != _catalogue.DefaultModelId)
+                                        {
+                                            <RadzenButton Text="@_text[PlatformAiCatalogueViewText.MakeDefault]" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => MakeDefaultAsync(model))" Disabled="_busy" />
+                                        }
+                                        <RadzenButton Text="@_text[PlatformAiCatalogueViewText.Test]" Icon="science" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => TestAsync(model))" Disabled="_busy" />
+                                        <RadzenButton Text="@_text[PlatformAiCatalogueViewText.Remove]" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => RemoveModelAsync(model))" Disabled="_busy" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (_catalogue.Providers.Length > 0)
+            {
+                <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-m-0">@(_modelId == null ? _text[PlatformAiCatalogueViewText.NewModel] : _modelDisplayName)</RadzenText>
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Wrap="FlexWrap.Wrap" AlignItems="AlignItems.Start">
+                    <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.Provider]" Variant="Variant.Outlined">
+                        <RadzenDropDown TValue="string" Data="_catalogue.Providers" TextProperty="@nameof(PlatformAiProvider.Name)" ValueProperty="@nameof(PlatformAiProvider.Id)"
+                                        @bind-Value="_modelProviderId" Disabled="_busy" Style="min-width: 12rem;" data-model-provider />
+                    </RadzenFormField>
+                    <RadzenButton Text="@_text[PlatformAiCatalogueViewText.LoadModels]" Icon="list" ButtonStyle="ButtonStyle.Light" Click="LoadModelsAsync" Disabled="@(_busy || _modelProviderId == null)" data-load-models />
+                    @if (_providerModels.Length > 0)
+                    {
+                        <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.ModelId]" Variant="Variant.Outlined">
+                            <RadzenDropDown TValue="string" Data="_providerModels" TextProperty="@nameof(SupportAiModel.DisplayName)" ValueProperty="@nameof(SupportAiModel.Id)"
+                                            Value="@_modelModelId" ValueChanged="@((string value) => ProviderModelChosen(value))" Disabled="_busy" Style="min-width: 16rem;" data-provider-models />
+                        </RadzenFormField>
+                    }
+                    else
+                    {
+                        <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.ModelId]" Variant="Variant.Outlined">
+                            <RadzenTextBox @bind-Value="_modelModelId" Disabled="_busy" data-model-modelid />
+                        </RadzenFormField>
+                    }
+                    <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.DisplayName]" Variant="Variant.Outlined">
+                        <RadzenTextBox @bind-Value="_modelDisplayName" Disabled="_busy" data-model-name />
+                    </RadzenFormField>
+                    <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.ProcessedIn]" Variant="Variant.Outlined">
+                        <RadzenTextBox @bind-Value="_modelProcessedIn" Disabled="_busy" />
+                    </RadzenFormField>
+                    <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.StoredIn]" Variant="Variant.Outlined">
+                        <RadzenTextBox @bind-Value="_modelStoredIn" Disabled="_busy" />
+                    </RadzenFormField>
+                    <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.AgreementUrl]" Variant="Variant.Outlined">
+                        <RadzenTextBox @bind-Value="_modelAgreementUrl" Disabled="_busy" Style="min-width: 16rem;" />
+                    </RadzenFormField>
+                    <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.PriceInput]" Variant="Variant.Outlined">
+                        <RadzenNumeric TValue="decimal?" @bind-Value="_modelPriceInput" Disabled="_busy" data-price-input />
+                    </RadzenFormField>
+                    <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.PriceCachedInput]" Variant="Variant.Outlined">
+                        <RadzenNumeric TValue="decimal?" @bind-Value="_modelPriceCached" Disabled="_busy" />
+                    </RadzenFormField>
+                    <RadzenFormField Text="@_text[PlatformAiCatalogueViewText.PriceOutput]" Variant="Variant.Outlined">
+                        <RadzenNumeric TValue="decimal?" @bind-Value="_modelPriceOutput" Disabled="_busy" />
+                    </RadzenFormField>
+                    <RadzenCheckBox TValue="bool" @bind-Value="_modelOffered" Disabled="_busy" data-model-offered />
+                    <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0">@_text[PlatformAiCatalogueViewText.Offered]</RadzenText>
+                    <RadzenButton Text="@_text[PlatformAiCatalogueViewText.SaveModel]" Icon="save" Click="SaveModelAsync" Disabled="@(_busy || _modelProviderId == null)" data-save-model />
+                </RadzenStack>
+            }
+        </RadzenStack>
+
+        @if (_reply != null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Success" ShowIcon="true" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false" data-reply>
+                @_text[PlatformAiCatalogueViewText.TestReply] @_reply
+            </RadzenAlert>
+        }
+        @if (_problem != null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" Variant="Variant.Flat" Shade="Shade.Lighter" AllowClose="false" data-problem>
+                @_problem
+            </RadzenAlert>
+        }
+    </RadzenStack>
+}
+
+@code {
+    [Inject] private IThargaTextProvider TextProvider { get; set; }
+
+    private static readonly SupportAiConnectionKind[] _kinds =
+        [.. Enum.GetValues<SupportAiConnectionKind>().Where(x => x != SupportAiConnectionKind.Platform && x != SupportAiConnectionKind.Off)];
+
+    private TextSet _text = TextSet.Empty;
+    private PlatformAiCatalogue _catalogue = new();
+    private SupportAiModel[] _providerModels = [];
+    private bool _ready;
+    private bool _permitted = true;
+    private bool _busy;
+    private string _reply;
+    private string _problem;
+
+    private string _providerId;
+    private string _providerName;
+    private SupportAiConnectionKind _providerKind = SupportAiConnectionKind.Anthropic;
+    private string _providerAddress;
+    private string _providerKey;
+    private bool _providerHasKey;
+
+    private string _modelId;
+    private string _modelProviderId;
+    private string _modelModelId;
+    private string _modelDisplayName;
+    private string _modelProcessedIn;
+    private string _modelStoredIn;
+    private string _modelAgreementUrl;
+    private decimal? _modelPriceInput;
+    private decimal? _modelPriceCached;
+    private decimal? _modelPriceOutput;
+    private bool _modelOffered = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _text = await TextProvider.ResolveAsync(PlatformAiCatalogueViewText.All);
+        await ReloadAsync();
+        _ready = true;
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            _catalogue = await Catalogue.GetCatalogueAsync();
+            _permitted = true;
+            _modelProviderId ??= _catalogue.Providers.FirstOrDefault()?.Id;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _permitted = false;
+        }
+    }
+
+    private string ProviderName(string providerId) => _catalogue.Providers.FirstOrDefault(x => x.Id == providerId)?.Name ?? providerId;
+
+    private static string Price(decimal? price, PlatformAiModel model) => price == null ? "" : $"{price:0.####} {model.Currency}";
+
+    private void EditProvider(PlatformAiProvider provider)
+    {
+        _providerId = provider.Id;
+        _providerName = provider.Name;
+        _providerKind = provider.Kind;
+        _providerAddress = provider.BaseAddress;
+        _providerHasKey = provider.HasApiKey;
+        _providerKey = null;
+    }
+
+    private void ClearProvider()
+    {
+        _providerId = null;
+        _providerName = null;
+        _providerAddress = null;
+        _providerKey = null;
+        _providerHasKey = false;
+    }
+
+    private Task SaveProviderAsync() => RunAsync(async () =>
+    {
+        // An empty key box keeps the stored key; the request says so with null, and a typed key replaces it.
+        var key = string.IsNullOrWhiteSpace(_providerKey) ? null : _providerKey.Trim();
+        var result = await Catalogue.SetProviderAsync(new PlatformAiProviderRequest { Id = _providerId, Name = _providerName, Kind = _providerKind, BaseAddress = _providerAddress, ApiKey = key });
+        if (result.Succeeded) ClearProvider();
+        return result;
+    });
+
+    private Task RemoveProviderAsync(PlatformAiProvider provider) => RunAsync(() => Catalogue.RemoveProviderAsync(provider.Id));
+
+    private void EditModel(PlatformAiModel model)
+    {
+        _modelId = model.Id;
+        _modelProviderId = model.ProviderId;
+        _modelModelId = model.ModelId;
+        _modelDisplayName = model.DisplayName;
+        _modelProcessedIn = model.ProcessedIn;
+        _modelStoredIn = model.StoredIn;
+        _modelAgreementUrl = model.AgreementUrl;
+        _modelPriceInput = model.PriceInput;
+        _modelPriceCached = model.PriceCachedInput;
+        _modelPriceOutput = model.PriceOutput;
+        _modelOffered = model.Offered;
+        _providerModels = [];
+    }
+
+    private void ClearModel()
+    {
+        _modelId = null;
+        _modelModelId = null;
+        _modelDisplayName = null;
+        _modelProcessedIn = null;
+        _modelStoredIn = null;
+        _modelAgreementUrl = null;
+        _modelPriceInput = _modelPriceCached = _modelPriceOutput = null;
+        _modelOffered = true;
+        _providerModels = [];
+    }
+
+    private void ProviderModelChosen(string value)
+    {
+        _modelModelId = value;
+        if (string.IsNullOrWhiteSpace(_modelDisplayName)) _modelDisplayName = _providerModels.FirstOrDefault(x => x.Id == value)?.DisplayName ?? value;
+    }
+
+    private async Task LoadModelsAsync()
+    {
+        _busy = true;
+        _problem = null;
+        try
+        {
+            var list = await Catalogue.ListProviderModelsAsync(_modelProviderId);
+            _problem = list.Problem;
+            _providerModels = list.Problem == null ? [.. list.Models] : [];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task SaveModelAsync() => RunAsync(async () =>
+    {
+        var model = new PlatformAiModel
+        {
+            Id = _modelId ?? Guid.NewGuid().ToString("N"),
+            ProviderId = _modelProviderId,
+            ModelId = _modelModelId,
+            DisplayName = _modelDisplayName,
+            ProcessedIn = _modelProcessedIn,
+            StoredIn = _modelStoredIn,
+            AgreementUrl = _modelAgreementUrl,
+            PriceInput = _modelPriceInput,
+            PriceCachedInput = _modelPriceCached,
+            PriceOutput = _modelPriceOutput,
+            Offered = _modelOffered
+        };
+
+        var models = _catalogue.Models.Where(x => x.Id != model.Id).Append(model).ToArray();
+
+        // The first offered model becomes the default, so a catalogue with an offer always has one.
+        var defaultId = _catalogue.DefaultModelId is { } d && models.Any(x => x.Id == d && x.Offered) ? d : models.FirstOrDefault(x => x.Offered)?.Id;
+
+        var result = await Catalogue.SetModelsAsync(new PlatformAiModelsRequest { Models = models, DefaultModelId = defaultId });
+        if (result.Succeeded) ClearModel();
+        return result;
+    });
+
+    private Task MakeDefaultAsync(PlatformAiModel model)
+        => RunAsync(() => Catalogue.SetModelsAsync(new PlatformAiModelsRequest { Models = _catalogue.Models, DefaultModelId = model.Id }));
+
+    private Task RemoveModelAsync(PlatformAiModel model) => RunAsync(() =>
+    {
+        var models = _catalogue.Models.Where(x => x.Id != model.Id).ToArray();
+        var defaultId = _catalogue.DefaultModelId == model.Id ? models.FirstOrDefault(x => x.Offered)?.Id : _catalogue.DefaultModelId;
+        return Catalogue.SetModelsAsync(new PlatformAiModelsRequest { Models = models, DefaultModelId = defaultId });
+    });
+
+    private async Task TestAsync(PlatformAiModel model)
+    {
+        _busy = true;
+        _reply = null;
+        _problem = null;
+        try
+        {
+            var result = await Catalogue.TestModelAsync(model.Id);
+            if (result.Succeeded) _reply = result.Reply;
+            else _problem = result.Problem;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RunAsync(Func<Task<SupportAiConnectionResult>> operation)
+    {
+        _busy = true;
+        _reply = null;
+        _problem = null;
+        try
+        {
+            var result = await operation();
+            if (result.Succeeded)
+            {
+                NotificationService.Notify(NotificationSeverity.Success, _text[PlatformAiCatalogueViewText.Saved]);
+                await ReloadAsync();
+            }
+            else
+            {
+                _problem = result.Problem ?? _text[PlatformAiCatalogueViewText.Failed];
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _permitted = false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

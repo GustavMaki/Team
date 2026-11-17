@@ -33,6 +33,12 @@ internal sealed class AuthorizationSupportAiConnectionServiceDecorator(
         await inner.UsePlatformModelAsync(teamKey, cancellationToken);
     }
 
+    public async Task UsePlatformModelAsync(string teamKey, string modelId, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(teamKey);
+        await inner.UsePlatformModelAsync(teamKey, modelId, cancellationToken);
+    }
+
     public async Task TurnOffAsync(string teamKey, CancellationToken cancellationToken = default)
     {
         await RequireAsync(teamKey);

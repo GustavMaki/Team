@@ -28,7 +28,8 @@ internal sealed class SupportAiConnectionService(
     TimeProvider timeProvider,
     bool platformModelAvailable,
     ISupportChatClientFactory factory = null,
-    string platformModelName = null) : ISupportAiConnectionService
+    string platformModelName = null,
+    IPlatformAiCatalogueStore catalogueStore = null) : ISupportAiConnectionService
 {
     internal const string ProtectionPurpose = "Tharga.Team.Support.AiConnection.ApiKey.v1";
     internal const string TestPrompt = "Reply with one short sentence saying that you can answer.";
@@ -38,23 +39,44 @@ internal sealed class SupportAiConnectionService(
 
     private readonly IDataProtector _protector = dataProtection.CreateProtector(ProtectionPurpose);
 
-    public Task<SupportAiConnectionChoices> GetChoicesAsync(string teamKey, CancellationToken cancellationToken = default)
+    public async Task<SupportAiConnectionChoices> GetChoicesAsync(string teamKey, CancellationToken cancellationToken = default)
     {
         var providers = factory?.Providers ?? [];
+        var catalogue = await OfferedAsync(cancellationToken);
+        var available = platformModelAvailable || catalogue.Models.Length > 0;
 
         SupportAiConnectionKind[] kinds =
         [
-            .. platformModelAvailable ? [SupportAiConnectionKind.Platform] : Array.Empty<SupportAiConnectionKind>(),
+            .. available ? [SupportAiConnectionKind.Platform] : Array.Empty<SupportAiConnectionKind>(),
             .. providers.Select(x => x.Kind),
             SupportAiConnectionKind.Off
         ];
 
-        return Task.FromResult(new SupportAiConnectionChoices
+        return new SupportAiConnectionChoices
         {
             Kinds = kinds,
             ProviderDefaults = [.. providers],
-            PlatformModel = platformModelAvailable ? platformModelName : null
-        });
+            PlatformModel = catalogue.Models.Length > 0 ? null : platformModelAvailable ? platformModelName : null,
+            PlatformModels = [.. catalogue.Models.Select(x => new SupportAiPlatformModelChoice
+            {
+                Id = x.Id,
+                DisplayName = x.DisplayName,
+                Provider = catalogue.ProviderNames.GetValueOrDefault(x.ProviderId),
+                ProcessedIn = x.ProcessedIn,
+                StoredIn = x.StoredIn,
+                AgreementUrl = x.AgreementUrl,
+                IsDefault = x.Id == catalogue.DefaultModelId
+            })]
+        };
+    }
+
+    /// <summary>The models teams may choose from, with their providers' names and the default; none when no catalogue is kept.</summary>
+    private async Task<(PlatformAiModel[] Models, Dictionary<string, string> ProviderNames, string DefaultModelId)> OfferedAsync(CancellationToken cancellationToken)
+    {
+        var stored = catalogueStore == null ? null : await catalogueStore.GetAsync(cancellationToken);
+        if (stored == null) return ([], [], null);
+
+        return ([.. stored.Models.Where(x => x.Offered)], stored.Providers.ToDictionary(x => x.Id, x => x.Name), stored.DefaultModelId);
     }
 
     /// <summary>
@@ -80,16 +102,26 @@ internal sealed class SupportAiConnectionService(
             BaseAddress = stored.BaseAddress,
             Model = stored.Model,
             HasApiKey = stored.ProtectedApiKey != null,
+            PlatformModelId = stored.PlatformModelId,
             ChangedAt = stored.ChangedAt,
             ChangedBy = stored.ChangedByName
         };
     }
 
-    public async Task UsePlatformModelAsync(string teamKey, CancellationToken cancellationToken = default)
-    {
-        if (!platformModelAvailable) throw new InvalidOperationException("This site has no platform model to answer with.");
+    public Task UsePlatformModelAsync(string teamKey, CancellationToken cancellationToken = default)
+        => UsePlatformModelAsync(teamKey, null, cancellationToken);
 
-        await SaveAsync(teamKey, SupportAiConnectionKind.Platform, null, null, null, cancellationToken);
+    public async Task UsePlatformModelAsync(string teamKey, string modelId, CancellationToken cancellationToken = default)
+    {
+        var catalogue = await OfferedAsync(cancellationToken);
+        var choice = string.IsNullOrWhiteSpace(modelId) ? null : modelId.Trim();
+
+        if (choice != null && catalogue.Models.All(x => x.Id != choice))
+            throw new InvalidOperationException("That model is not offered.");
+        if (choice == null && !platformModelAvailable && catalogue.Models.Length == 0)
+            throw new InvalidOperationException("This site has no platform model to answer with.");
+
+        await SaveAsync(teamKey, SupportAiConnectionKind.Platform, null, null, null, cancellationToken, choice);
     }
 
     public Task TurnOffAsync(string teamKey, CancellationToken cancellationToken = default)
@@ -188,7 +220,7 @@ internal sealed class SupportAiConnectionService(
         return (new SupportAiEndpoint(request.Kind, baseAddress, apiKey, model), null);
     }
 
-    private async Task SaveAsync(string teamKey, SupportAiConnectionKind kind, string baseAddress, string model, string protectedApiKey, CancellationToken cancellationToken)
+    private async Task SaveAsync(string teamKey, SupportAiConnectionKind kind, string baseAddress, string model, string protectedApiKey, CancellationToken cancellationToken, string platformModelId = null)
         => await store.SetAsync(new StoredSupportAiConnection
         {
             TeamKey = teamKey,
@@ -196,6 +228,7 @@ internal sealed class SupportAiConnectionService(
             BaseAddress = baseAddress,
             Model = model,
             ProtectedApiKey = protectedApiKey,
+            PlatformModelId = platformModelId,
             ChangedAt = timeProvider.GetUtcNow().UtcDateTime,
             ChangedByIdentity = await authorizer.GetSubjectAsync(),
             ChangedByName = await authorizer.GetDisplayNameAsync()

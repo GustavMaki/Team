@@ -120,6 +120,78 @@ public class SupportAssistantUsageViewTests : BunitContext
         _usage.Verify(x => x.GetUsageAsync(from, DateTime.UtcNow.Date.AddDays(1), null, default));
     }
 
+    /// <summary>What the answers cost is shown where they were priced, and a dash where they were not, rather than a cost of zero.</summary>
+    [Fact]
+    public void ACost_IsShownWhereAnswersWerePriced_AndADashWhereTheyWereNot()
+    {
+        SupportAssistantUsageTotal[] rows =
+        [
+            Rows[0] with { Cost = 0.0125m, Currency = "USD" },
+            Rows[1]
+        ];
+        _usage.Setup(x => x.GetUsageAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), null, default)).ReturnsAsync(rows);
+
+        var view = Render();
+
+        var costs = view.FindAll("[data-usage-row] [data-cost]");
+        var shown = 0.0125m.ToString("N4");
+        Assert.Contains(shown, costs[0].TextContent);
+        Assert.Contains("USD", costs[0].TextContent);
+        Assert.Equal(SupportAssistantUsageViewText.NoCost.Default, costs[1].TextContent.Trim());
+        Assert.Contains(shown, view.Find("[data-usage-total] [data-cost]").TextContent);
+    }
+
+    /// <summary>A cost added up across currencies would mean nothing, so the total is left out.</summary>
+    [Fact]
+    public void RowsInTwoCurrencies_HaveNoTotalCost()
+    {
+        SupportAssistantUsageTotal[] rows =
+        [
+            Rows[0] with { Cost = 1m, Currency = "USD" },
+            Rows[1] with { Cost = 2m, Currency = "EUR" }
+        ];
+        _usage.Setup(x => x.GetUsageAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), null, default)).ReturnsAsync(rows);
+
+        var view = Render();
+
+        Assert.Equal(SupportAssistantUsageViewText.NoCost.Default, view.Find("[data-usage-total] [data-cost]").TextContent.Trim());
+        Assert.DoesNotContain("Cost:", view.Find("[data-totals-line]").TextContent);
+    }
+
+    [Fact]
+    public void TheTotalsLine_AddsUpThePeriod()
+    {
+        _usage.Setup(x => x.GetUsageAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), null, default)).ReturnsAsync(Rows);
+
+        var line = Render().Find("[data-totals-line]").TextContent;
+
+        // 3 answered + 1 declined + 2 answered; 1200 + 600 tokens; 1500 in, 600 cached, 300 out.
+        Assert.Contains(6.ToString("N0"), line);
+        Assert.Contains(1800.ToString("N0"), line);
+        Assert.Contains(1500.ToString("N0"), line);
+        Assert.Contains(300.ToString("N0"), line);
+    }
+
+    [Fact]
+    public void ClickingAColumn_SortsByIt_AndAgainReversesIt()
+    {
+        _usage.Setup(x => x.GetUsageAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), null, default)).ReturnsAsync(Rows);
+        var view = Render();
+        string[] Teams() => [.. view.FindAll("[data-usage-row] [data-team]").Select(x => x.TextContent.Trim())];
+
+        Assert.Equal(["team-a", "team-b"], Teams());
+
+        view.Find("[data-sort-answers]").Click();
+        Assert.Equal(["team-b", "team-a"], Teams());
+
+        view.Find("[data-sort-answers]").Click();
+        Assert.Equal(["team-a", "team-b"], Teams());
+
+        view.Find("[data-sort-team]").Click();
+        view.Find("[data-sort-team]").Click();
+        Assert.Equal(["team-b", "team-a"], Teams());
+    }
+
     [Fact]
     public void AReaderWithoutTheScope_IsToldSo_AndShownNothing()
     {

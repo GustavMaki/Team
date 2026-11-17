@@ -30,7 +30,12 @@ internal sealed class MongoSupportAssistantUsageStore(ISupportAssistantUsageColl
         ToolCalls = record.ToolCalls,
         Answered = record.Answered,
         Duration = record.Duration,
-        At = record.At
+        At = record.At,
+        PriceInput = record.PriceInput,
+        PriceCachedInput = record.PriceCachedInput,
+        PriceOutput = record.PriceOutput,
+        Currency = record.Currency,
+        Cost = record.Cost
     };
 
     internal static SupportAssistantUsageRecord ToRecord(SupportAssistantUsageRecordEntity entity) => new()
@@ -47,7 +52,12 @@ internal sealed class MongoSupportAssistantUsageStore(ISupportAssistantUsageColl
         ToolCalls = entity.ToolCalls,
         Answered = entity.Answered,
         Duration = entity.Duration,
-        At = entity.At
+        At = entity.At,
+        PriceInput = entity.PriceInput,
+        PriceCachedInput = entity.PriceCachedInput,
+        PriceOutput = entity.PriceOutput,
+        Currency = entity.Currency,
+        Cost = entity.Cost
     };
 }
 

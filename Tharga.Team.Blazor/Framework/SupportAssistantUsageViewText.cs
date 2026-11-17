@@ -42,6 +42,18 @@ public static class SupportAssistantUsageViewText
     /// <summary>The column of all tokens.</summary>
     public static readonly TextKey TotalTokens = new("team.support.usage.totalTokens", "Total tokens");
 
+    /// <summary>The column of what the answers cost.</summary>
+    public static readonly TextKey Cost = new("team.support.usage.cost", "Cost");
+
+    /// <summary>The line above the table adding up the period: answers, tokens in (cached) and out.</summary>
+    public static readonly TextKey TotalsLine = new("team.support.usage.totalsLine", "{0:N0} answers, {1:N0} tokens: {2:N0} in ({3:N0} cached) and {4:N0} out.");
+
+    /// <summary>Added to the totals line when answers were priced.</summary>
+    public static readonly TextKey CostLine = new("team.support.usage.costLine", "Cost: {0}.");
+
+    /// <summary>Shown for a cost that is not known: before prices were recorded, or a team's own provider.</summary>
+    public static readonly TextKey NoCost = new("team.support.usage.noCost", "-");
+
     /// <summary>The row adding up every row.</summary>
     public static readonly TextKey Total = new("team.support.usage.total", "Total");
 
@@ -58,6 +70,6 @@ public static class SupportAssistantUsageViewText
     public static readonly TextKey[] All =
     [
         From, To, Team, Provider, Model, Answers, Declines, ToolCalls, InputTokens, CachedTokens, OutputTokens, TotalTokens, Total, Unknown,
-        NoUsage, NotPermitted
+        NoUsage, NotPermitted, Cost, TotalsLine, CostLine, NoCost
     ];
 }

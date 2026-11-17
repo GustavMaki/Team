@@ -76,16 +76,17 @@ public static class SupportAiConnectionEndpointRegistration
         group.MapPut("", (HttpContext context, ISupportAiConnectionService service) => RunWithRequestAsync(context, async (teamKey, request, cancellationToken)
             => Outcome(await service.ConnectAsync(teamKey, request, cancellationToken))));
 
+        // ?model=ID chooses one of the platform's offered models (see /choices); without it the platform's default answers.
         group.MapPut("/platform", (HttpContext context, ISupportAiConnectionService service) => RunAsync(context, async (teamKey, cancellationToken) =>
         {
             try
             {
-                await service.UsePlatformModelAsync(teamKey, cancellationToken);
+                await service.UsePlatformModelAsync(teamKey, context.Request.Query["model"].ToString(), cancellationToken);
                 return Results.NoContent();
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException ex)
             {
-                return Results.Json(SupportAiConnectionResult.Failure("This site has no platform model to answer with."), Json, statusCode: StatusCodes.Status422UnprocessableEntity);
+                return Results.Json(SupportAiConnectionResult.Failure(ex.Message), Json, statusCode: StatusCodes.Status422UnprocessableEntity);
             }
         }));
 

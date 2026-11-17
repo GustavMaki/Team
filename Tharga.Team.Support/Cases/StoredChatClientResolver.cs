@@ -24,9 +24,11 @@ internal sealed class StoredChatClientResolver(
     SupportAiClientCache cache,
     ILogger<StoredChatClientResolver> logger,
     IChatClient platform = null,
-    ISupportChatClientFactory factory = null) : ISupportChatClientResolver
+    ISupportChatClientFactory factory = null,
+    IPlatformAiCatalogueStore catalogueStore = null) : ISupportChatClientResolver
 {
     private readonly IDataProtector _protector = dataProtection.CreateProtector(SupportAiConnectionService.ProtectionPurpose);
+    private readonly IDataProtector _catalogueProtector = dataProtection.CreateProtector(PlatformAiCatalogueService.ProtectionPurpose);
 
     public async Task<IChatClient> GetAsync(string teamKey, CancellationToken cancellationToken = default)
     {
@@ -35,7 +37,7 @@ internal sealed class StoredChatClientResolver(
         switch (stored?.Kind ?? SupportAiConnectionKind.Platform)
         {
             case SupportAiConnectionKind.Platform:
-                return platform;
+                return await PlatformAsync(teamKey, stored, cancellationToken) ?? platform;
             case SupportAiConnectionKind.Off:
                 return null;
         }
@@ -53,6 +55,47 @@ internal sealed class StoredChatClientResolver(
             catch (CryptographicException)
             {
                 logger.LogWarning("The stored AI key for team {TeamKey} can no longer be decrypted, so the team has no assistant until the key is entered again.", teamKey);
+                return null;
+            }
+        });
+    }
+
+    /// <summary>
+    /// The catalogue's model for a team on the platform: the one it chose while that is still offered, otherwise the default.
+    /// Null when no catalogue is kept or it offers nothing, so the registered client answers as it always did.
+    /// </summary>
+    /// <remarks>Read on every answer, so staff changing the default or a price reaches the next answer; the client is cached until the catalogue or the team's choice changes.</remarks>
+    private async Task<IChatClient> PlatformAsync(string teamKey, StoredSupportAiConnection connection, CancellationToken cancellationToken)
+    {
+        if (catalogueStore == null || factory == null || teamKey == null) return null;
+
+        var catalogue = await catalogueStore.GetAsync(cancellationToken);
+        if (catalogue == null) return null;
+
+        var model = PlatformAiPricing.ChooseModel(catalogue, connection?.PlatformModelId);
+        var provider = model == null ? null : catalogue.Providers.FirstOrDefault(x => x.Id == model.ProviderId);
+        if (provider == null) return null;
+
+        var version = new StoredSupportAiConnection
+        {
+            TeamKey = teamKey,
+            Kind = SupportAiConnectionKind.Platform,
+            BaseAddress = provider.BaseAddress,
+            Model = model.ModelId,
+            ProtectedApiKey = provider.ProtectedApiKey,
+            ChangedAt = catalogue.ChangedAt
+        };
+
+        return cache.GetOrCreate(version, () =>
+        {
+            try
+            {
+                var apiKey = provider.ProtectedApiKey == null ? null : _catalogueProtector.Unprotect(provider.ProtectedApiKey);
+                return factory.Create(new SupportAiEndpoint(provider.Kind, provider.BaseAddress, apiKey, model.ModelId));
+            }
+            catch (CryptographicException)
+            {
+                logger.LogWarning("The platform catalogue's key for provider {Provider} can no longer be decrypted, so the platform model answers nobody until the key is entered again.", provider.Name);
                 return null;
             }
         });

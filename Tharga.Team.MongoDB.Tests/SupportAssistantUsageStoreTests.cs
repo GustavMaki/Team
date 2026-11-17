@@ -71,11 +71,52 @@ public class SupportAssistantUsageStoreTests
     {
         var group = Stages(null)[1]["$group"].AsBsonDocument;
 
-        Assert.Equal(new BsonDocument { { "t", "$TeamKey" }, { "p", "$Provider" }, { "m", "$Model" } }, group["_id"].AsBsonDocument);
+        Assert.Equal(new BsonDocument { { "t", "$TeamKey" }, { "p", "$Provider" }, { "m", "$Model" }, { "c", "$Currency" } }, group["_id"].AsBsonDocument);
         Assert.Equal(new BsonDocument("$sum", new BsonDocument("$cond", new BsonArray { "$Answered", 1, 0 })), group["answers"].AsBsonDocument);
         Assert.Equal(new BsonDocument("$sum", new BsonDocument("$cond", new BsonArray { "$Answered", 0, 1 })), group["declines"].AsBsonDocument);
         Assert.Equal(new BsonDocument("$sum", "$ToolCalls"), group["toolCalls"].AsBsonDocument);
         Assert.Equal(new BsonDocument("$sum", "$CachedInputTokens"), group["cached"].AsBsonDocument);
+    }
+
+    [Fact]
+    public void TheCost_IsSummedByTheServer_AndCountsHowManyAnswersWerePriced()
+    {
+        var group = Stages(null)[1]["$group"].AsBsonDocument;
+
+        Assert.Equal(new BsonDocument("$sum", "$Cost"), group["cost"].AsBsonDocument);
+        Assert.Equal(new BsonDocument("$sum", new BsonDocument("$cond", new BsonArray { new BsonDocument("$isNumber", "$Cost"), 1, 0 })), group["priced"].AsBsonDocument);
+    }
+
+    [Fact]
+    public void APricedRow_CarriesItsCostAndCurrency()
+    {
+        var row = new BsonDocument
+        {
+            { "_id", new BsonDocument { { "t", "team-a" }, { "p", "openai" }, { "m", "gpt" }, { "c", "USD" } } },
+            { "answers", 2 }, { "declines", 0 }, { "toolCalls", 0L }, { "input", 10L }, { "cached", 0L }, { "output", 5L }, { "total", 15L },
+            { "cost", new BsonDecimal128(0.0125m) }, { "priced", 2 }
+        };
+
+        var total = SupportAssistantUsageCollection.ToTotal(row);
+
+        Assert.Equal(0.0125m, total.Cost);
+        Assert.Equal("USD", total.Currency);
+    }
+
+    [Fact]
+    public void ARowWithNoPricedAnswer_HasNoCost_NotACostOfZero()
+    {
+        var row = new BsonDocument
+        {
+            { "_id", new BsonDocument { { "t", "team-a" }, { "p", BsonNull.Value }, { "m", BsonNull.Value }, { "c", BsonNull.Value } } },
+            { "answers", 1 }, { "declines", 0 }, { "toolCalls", 0L }, { "input", 10L }, { "cached", 0L }, { "output", 5L }, { "total", 15L },
+            { "cost", 0 }, { "priced", 0 }
+        };
+
+        var total = SupportAssistantUsageCollection.ToTotal(row);
+
+        Assert.Null(total.Cost);
+        Assert.Null(total.Currency);
     }
 
     [Fact]

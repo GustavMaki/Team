@@ -185,7 +185,7 @@ builder.AddThargaTeam(o =>
         // half of trying support out -- write as a member in the side panel, answer here in another window.
         // support:usage:read shows the assistant's usage per team on the same page.
         roles.Map("Developer", "system:metrics:read", "mcp:discover", ApiKeyScopes.SystemManage, AuditScopes.Read, SystemUserScopes.Manage, SystemTeamScopes.Delete, SimulationScopes.Demo, SystemApiKeyScopes.Oversee, SystemMessageScopes.Send, SystemContactScopes.Send,
-            SystemSupportScopes.AllManage, SystemSupportScopes.Read, SystemSupportScopes.Manage, SystemSupportScopes.UsageRead);
+            SystemSupportScopes.AllManage, SystemSupportScopes.Read, SystemSupportScopes.Manage, SystemSupportScopes.UsageRead, SystemSupportScopes.AiCatalogueManage);
     };
 
     // Controllers on, which exposes the toolkit's own REST endpoints — GET /api/audit — plus Swagger at
@@ -337,6 +337,8 @@ builder.Services.AddThargaSupportCases(o =>
 // team's own, or off. A team that never chose keeps the platform's. The key is stored encrypted with Data Protection,
 // so the key ring lives in MongoDB where every instance reads it.
 builder.Services.AddThargaSupportAiConnections();
+// Staff curate the providers and models teams choose from, on the "Assistant admin" page.
+builder.Services.AddThargaSupportPlatformAiCatalogue();
 builder.Services.AddThargaSupportAiProviders();
 builder.Services.AddThargaSupportOpenAIProviders();
 builder.Services.AddDataProtection()
@@ -467,6 +469,9 @@ app.MapThargaSupportSlack();
 // The team's AI connection over REST, as the "AI assistant" page offers it, for an API key with assistant:manage on
 // its team. Behind the same policy as the audit API above.
 app.MapThargaSupportAiConnection();
+
+// The platform's AI catalogue over REST, for a system key with support:aicatalogue:manage, as "Assistant admin" offers it.
+app.MapThargaSupportPlatformAiCatalogue();
 
 // Where unsubscribe links lead. Anonymous by design: the token in the link authorizes the one change it names, and
 // GET only asks -- the change is a POST, from the page's button or a mail provider's one-click request.
