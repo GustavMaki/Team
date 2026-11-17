@@ -40,6 +40,8 @@ public class AuditingTeamServiceDecorator : ITeamService
 
     public IAsyncEnumerable<ITeam> GetTeamsAsync() => _inner.GetTeamsAsync();
     public IAsyncEnumerable<ITeam<TMember>> GetTeamsAsync<TMember>() where TMember : ITeamMember => _inner.GetTeamsAsync<TMember>();
+    public Task<TeamPage> GetTeamPageAsync(TeamPageRequest request) => _inner.GetTeamPageAsync(request);
+    public Task<TeamPageOf<TMember>> GetTeamPageAsync<TMember>(TeamPageRequest request) where TMember : ITeamMember => _inner.GetTeamPageAsync<TMember>(request);
     public Task<ITeam<TMember>> GetTeamAsync<TMember>(string teamKey) where TMember : ITeamMember => _inner.GetTeamAsync<TMember>(teamKey);
     public Task<ITeam> GetTeamByKeyAsync(string teamKey) => _inner.GetTeamByKeyAsync(teamKey);
     public Task<ITeamMember> GetTeamMemberAsync(string teamKey, string userKey) => _inner.GetTeamMemberAsync(teamKey, userKey);

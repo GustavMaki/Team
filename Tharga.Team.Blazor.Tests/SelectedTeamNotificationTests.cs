@@ -63,7 +63,7 @@ public class SelectedTeamNotificationTests
 
     private void HasTeams(params ITeam[] teams)
     {
-        _teamService.Setup(x => x.GetTeamsAsync()).Returns(() => AsAsync(teams));
+        _teamService.Setup(x => x.GetTeamPageAsync(It.IsAny<TeamPageRequest>())).ReturnsAsync(() => new TeamPage([.. teams.Select(TeamSummary.Of)], null));
     }
 
     /// <param name="currentTeamKey">

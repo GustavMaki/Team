@@ -38,6 +38,23 @@ public interface ITeamDirectoryService
     IAsyncEnumerable<ITeam> GetTeamsAsync();
 
     /// <summary>
+    /// A page of the caller's teams by name then key, without their rosters, filtered exactly as <see cref="GetTeamsAsync()"/> is.
+    /// </summary>
+    /// <remarks>
+    /// The read for a list that only names teams: it asks the store for no roster, so its cost does not grow with the
+    /// members of the teams. Read one team's members when that team is opened. A default member, so an implementation of
+    /// your own keeps compiling; the default reads every team and slices the page out of them.
+    /// </remarks>
+    async Task<TeamPage> GetTeamPageAsync(TeamPageRequest request)
+    {
+        var teams = new List<ITeam>();
+        await foreach (var team in GetTeamsAsync()) teams.Add(team);
+
+        var (items, next) = TeamPaging.Slice(teams, request);
+        return new TeamPage([.. items.Select(TeamSummary.Of)], next);
+    }
+
+    /// <summary>
     /// Whether the caller's own membership in this team is suspended. A suspended member still sees the
     /// team here and in the selector — they simply hold no scopes in it.
     /// </summary>

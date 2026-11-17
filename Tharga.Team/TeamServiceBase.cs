@@ -278,6 +278,36 @@ public abstract class TeamServiceBase : ITeamService
     }
 
     /// <summary>
+    /// Backs <see cref="GetTeamPageAsync{TMember}"/>: a page of this user's teams, each holding at most this user's own
+    /// membership. The default reads every team and slices; a storage-backed service overrides it to read the page alone.
+    /// </summary>
+    protected virtual async Task<(IReadOnlyList<ITeam> Teams, string NextCursor)> GetTeamPageInternalAsync(IUser user, TeamPageRequest request)
+    {
+        var teams = new List<ITeam>();
+        await foreach (var team in GetTeamsAsync(user)) teams.Add(team);
+
+        return TeamPaging.Slice(teams, request);
+    }
+
+    public async Task<TeamPage> GetTeamPageAsync(TeamPageRequest request)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return new TeamPage([], null);
+
+        var page = await GetTeamPageInternalAsync(user, request);
+        return new TeamPage([.. page.Teams.Select(TeamSummary.Of)], page.NextCursor);
+    }
+
+    public async Task<TeamPageOf<TMember>> GetTeamPageAsync<TMember>(TeamPageRequest request) where TMember : ITeamMember
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return new TeamPageOf<TMember>([], null);
+
+        var page = await GetTeamPageInternalAsync(user, request);
+        return new TeamPageOf<TMember>([.. page.Teams.Select(x => (ITeam<TMember>)x)], page.NextCursor);
+    }
+
+    /// <summary>
     /// Backs <see cref="GetAllTeamsAsync()"/> — every team, regardless of membership, for callers holding
     /// <see cref="SystemTeamScopes.Read"/>. Virtual rather than abstract so existing derived services keep
     /// compiling; storage-backed bases override it.

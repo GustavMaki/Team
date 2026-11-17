@@ -743,6 +743,20 @@ reduction in level — it withdraws the grant.
 `GetTeamsAsync` filters the caller's own teams by the same rule, so a team it lists is a team the
 single-team reads will return, and one it omits is one they refuse.
 
+**Reading teams a page at a time.** `GetTeamsAsync` returns every team with its members, which grows with the
+teams times their members. A list that only names teams — a selector, a picker — reads
+`ITeamDirectoryService.GetTeamPageAsync(new TeamPageRequest(cursor, pageSize))` instead: a `TeamPage` of
+`TeamSummary` (key, name, icon and the consent the team holds, **no members**) in name-then-key order, and the
+`NextCursor` to pass back until it is null. The filter is the same, so a page lists what `GetTeamsAsync` would.
+`GetAllTeamSummariesAsync()` reads every page for a caller that wants them all but not their rosters. Read one
+team's members when that team is opened, through `GetTeamByKeyAsync`.
+
+The page types are plain records with no interface or `IAsyncEnumerable` in them, so they cross a wire as they
+are. `GetTeamPageAsync` is a default member of `ITeamDirectoryService`, `ITeamService` and
+`ITeamRepository`, so an implementation of your own keeps compiling and pages by reading everything; the built-in
+store asks the database for the page alone, sending only the caller's own member entry (all the read filter
+needs). **A decorator of `ITeamService` must forward both `GetTeamPageAsync` overloads.**
+
 ### Usage
 
 Create controllers as usual:

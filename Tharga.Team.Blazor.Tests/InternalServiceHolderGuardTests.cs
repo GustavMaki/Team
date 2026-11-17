@@ -48,7 +48,7 @@ public class InternalServiceHolderGuardTests
         [
             nameof(ITeamService.TeamsListChangedEvent),
             nameof(ITeamService.SelectTeamEvent),
-            nameof(ITeamService.GetTeamsAsync),
+            nameof(TeamPageExtensions.GetAllTeamSummariesAsync),
             nameof(ITeamService.GetAllTeamsAsync),
             nameof(ITeamService.GetTeamByKeyAsync),
             nameof(ITeamService.CreateTeamAsync),

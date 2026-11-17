@@ -138,7 +138,8 @@ public class ConsentExpiryReadsTests
     private static bool IsAllowed(string file)
     {
         var name = Path.GetFileName(file);
-        return name is "ITeam.cs" or "TeamConsent.cs"
+        // TeamSummary is an ITeam without a roster: it carries the stored consent and its temporary part together, unread, for whoever resolves it.
+        return name is "ITeam.cs" or "TeamConsent.cs" or "TeamSummary.cs"
                || file.Contains($"{Path.DirectorySeparatorChar}Tharga.Team.MongoDB{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
     }
 
