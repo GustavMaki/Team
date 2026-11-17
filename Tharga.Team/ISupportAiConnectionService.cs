@@ -28,6 +28,13 @@ public interface ISupportAiConnectionService
     /// <summary>Answers the team with the platform's model, and forgets any key the team stored.</summary>
     Task UsePlatformModelAsync(string teamKey, CancellationToken cancellationToken = default);
 
+    /// <summary>Answers with the platform's model <paramref name="modelId"/>, one of <see cref="SupportAiConnectionChoices.PlatformModels"/>; null is the default.</summary>
+    /// <remarks>A default member, so an implementation of your own keeps compiling; it refuses a model it cannot record. <b>A decorator must forward it.</b></remarks>
+    Task UsePlatformModelAsync(string teamKey, string modelId, CancellationToken cancellationToken = default)
+        => string.IsNullOrWhiteSpace(modelId)
+            ? UsePlatformModelAsync(teamKey, cancellationToken)
+            : throw new NotSupportedException($"'{GetType().Name}' cannot record which platform model a team uses.");
+
     /// <summary>Turns the assistant off for the team, and forgets any key the team stored.</summary>
     Task TurnOffAsync(string teamKey, CancellationToken cancellationToken = default);
 

@@ -41,6 +41,9 @@ public sealed record StoredSupportAiConnection
     /// <summary>The key as Data Protection protected it; never the key itself. Null when no key is stored.</summary>
     public string ProtectedApiKey { get; init; }
 
+    /// <summary>The platform model the team chose when <see cref="Kind"/> is <see cref="SupportAiConnectionKind.Platform"/>; null for the default.</summary>
+    public string PlatformModelId { get; init; }
+
     /// <summary>When the connection was set.</summary>
     public DateTime ChangedAt { get; init; }
 
