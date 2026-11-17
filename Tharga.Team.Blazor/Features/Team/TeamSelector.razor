@@ -289,7 +289,7 @@
         _canSeeAllTeams = TeamVisibility.CanSeeAllTeams(current.User);
         _teams = _canSeeAllTeams
             ? await TeamOversightService.GetAllTeamsAsync().ToArrayAsync()
-            : await TeamDirectoryService.GetTeamsAsync().ToArrayAsync();
+            : await TeamDirectoryService.GetAllTeamSummariesAsync();
         // An oversight caller listing every team is not asking about their own membership in each of
         // them, and would make one lookup per team in the system.
         _suspendedTeamKeys = _canSeeAllTeams ? [] : await ResolveSuspendedAsync(_teams);

@@ -299,6 +299,14 @@ public abstract class TeamServiceRepositoryBase<TTeamEntity, TMember> : TeamServ
         return _teamRepository.GetTeamsByUserAsync(user.Key);
     }
 
+    protected override async Task<(IReadOnlyList<ITeam> Teams, string NextCursor)> GetTeamPageInternalAsync(IUser user, TeamPageRequest request)
+    {
+        if (user == null) return ([], null);
+
+        var page = await _teamRepository.GetTeamPageByUserAsync(user.Key, request);
+        return ([.. page.Teams], page.NextCursor);
+    }
+
     protected override IAsyncEnumerable<ITeam> GetAllTeamsInternalAsync()
     {
         return _teamRepository.GetAllTeamsAsync();

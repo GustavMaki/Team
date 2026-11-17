@@ -563,7 +563,7 @@ public class TeamEntryGuardTests
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim(ClaimTypes.NameIdentifier, UserKey), new Claim("sid", "session-1"), .. currentTeamKey == null ? [] : new[] { new Claim(Constants.TeamKeyCookie, currentTeamKey) }], "Test"));
         var teamService = new Mock<ITeamService>();
-        teamService.Setup(x => x.GetTeamsAsync()).Returns(() => Async(teams));
+        teamService.Setup(x => x.GetTeamPageAsync(It.IsAny<TeamPageRequest>())).ReturnsAsync(() => new TeamPage([.. teams.Select(TeamSummary.Of)], null));
         var scripts = new List<string>();
         var js = new Mock<Microsoft.JSInterop.IJSRuntime>();
         js.Setup(x => x.InvokeAsync<Microsoft.JSInterop.Infrastructure.IJSVoidResult>("eval", It.IsAny<object[]>()))

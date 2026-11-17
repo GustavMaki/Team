@@ -93,7 +93,7 @@ public class TeamSelectorLabelTests : BunitContext
         ITeam[] teams = [Selected, Other];
 
         var directory = new Mock<ITeamDirectoryService>();
-        directory.Setup(x => x.GetTeamsAsync()).Returns(teams.ToAsyncEnumerable());
+        directory.Setup(x => x.GetTeamPageAsync(It.IsAny<TeamPageRequest>())).ReturnsAsync(new TeamPage([.. teams.Select(TeamSummary.Of)], null));
         directory.Setup(x => x.IsSuspendedAsync(It.IsAny<string>())).ReturnsAsync(false);
 
         var state = new Mock<ITeamStateService>();

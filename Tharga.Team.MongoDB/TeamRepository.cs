@@ -21,6 +21,42 @@ internal class TeamRepository<TTeamEntity, TMember> : ITeamRepository<TTeamEntit
         return _collection.GetAsync(x => x.DeletedAt == null && x.Members.Any(y => y.Key == userKey && y.State == MembershipState.Member));
     }
 
+    /// <remarks>
+    /// The database cuts the page and sends no roster: the one member entry kept is the caller's, which the read filter
+    /// needs.
+    /// </remarks>
+    public async Task<(IReadOnlyList<TTeamEntity> Teams, string NextCursor)> GetTeamPageByUserAsync(string userKey, TeamPageRequest request)
+    {
+        request ??= new TeamPageRequest();
+        var size = request.Size;
+        var found = await _collection.GetManyAsync(PageFilter(userKey, request.Cursor), PageOptions(userKey, size));
+        var items = (found?.Items ?? []).ToArray();
+        var page = items.Take(size).ToArray();
+
+        return (page, items.Length > size ? TeamPaging.CursorOf(page[^1]) : null);
+    }
+
+    internal static Options<TTeamEntity> PageOptions(string userKey, int size) => new()
+    {
+        Sort = Builders<TTeamEntity>.Sort.Ascending(x => x.Name).Ascending(x => x.Key),
+        Limit = size + 1,
+        Projection = Builders<TTeamEntity>.Projection
+            .ElemMatch(x => x.Members, Builders<TMember>.Filter.Eq(x => x.Key, userKey) & Builders<TMember>.Filter.Eq(x => x.State, MembershipState.Member))
+    };
+
+    /// <exception cref="ArgumentException">The cursor was not issued by a team read.</exception>
+    internal static FilterDefinition<TTeamEntity> PageFilter(string userKey, string cursor)
+    {
+        var team = Builders<TTeamEntity>.Filter;
+        var own = MembersOf([userKey]);
+        var after = TeamPaging.Parse(cursor);
+        if (after == null) return own;
+
+        return own & team.Or(
+            team.Gt(x => x.Name, after.Value.Name),
+            team.And(team.Eq(x => x.Name, after.Value.Name), team.Gt(x => x.Key, after.Value.Key)));
+    }
+
     public async Task<TTeamEntity[]> GetTeamsByUsersAsync(IReadOnlyCollection<string> userKeys)
     {
         string[] keys = [.. (userKeys ?? []).Where(x => !string.IsNullOrEmpty(x)).Distinct(StringComparer.Ordinal)];

@@ -303,20 +303,55 @@ public class TeamManagementService<TMember> : ITeamManagementService, ITeamLifec
 
         await foreach (var team in _inner.GetTeamsAsync<T>())
         {
-            // No registry means the app does not use scopes; filtering here would refuse reads it never gated.
-            if (_scopeRegistry == null || user == null)
+            if (await CanReadAsync(team, user)) yield return team;
+        }
+    }
+
+    /// <summary>
+    /// Whether the caller's own membership in <paramref name="team"/> grants <c>team:read</c>. The team need carry only
+    /// the caller's own member entry.
+    /// </summary>
+    private async Task<bool> CanReadAsync<T>(ITeam<T> team, IUser user) where T : ITeamMember
+    {
+        // No registry means the app does not use scopes; filtering here would refuse reads it never gated.
+        if (_scopeRegistry == null || user == null) return true;
+
+        var member = team.Members == null
+            ? null
+            : team.Members.Select(x => (ITeamMember)x).FirstOrDefault(x => x.Key == user.Key);
+
+        var grant = await _grants.ResolveFromMemberAsync(team.Key, member);
+
+        return grant?.Scopes.Contains(TeamScopes.Read) == true;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Filtered by the same rule as <see cref="GetTeamsAsync()"/>, from the one member entry the store returns. A team the
+    /// caller may not read is left out, so the page is topped up from the next until it is full or the teams run out;
+    /// the cursor it returns names the last team read, not the last one shown.
+    /// </remarks>
+    public async Task<TeamPage> GetTeamPageAsync(TeamPageRequest request)
+    {
+        request ??= new TeamPageRequest();
+        var user = _userService == null ? null : await _userService.GetCurrentUserAsync();
+        var items = new List<TeamSummary>();
+        var cursor = request.Cursor;
+
+        while (true)
+        {
+            var page = await _inner.GetTeamPageAsync<TMember>(new TeamPageRequest(cursor, request.Size - items.Count));
+
+            foreach (var team in page.Teams)
             {
-                yield return team;
-                continue;
+                if (await CanReadAsync(team, user)) items.Add(TeamSummary.Of(team));
             }
 
-            var member = team.Members == null
-                ? null
-                : team.Members.Select(x => (ITeamMember)x).FirstOrDefault(x => x.Key == user.Key);
+            // A cursor that does not move would read the same page for ever.
+            if (page.NextCursor == null || page.NextCursor == cursor) return new TeamPage(items, null);
 
-            var grant = await _grants.ResolveFromMemberAsync(team.Key, member);
-
-            if (grant?.Scopes.Contains(TeamScopes.Read) == true) yield return team;
+            cursor = page.NextCursor;
+            if (items.Count >= request.Size) return new TeamPage(items, cursor);
         }
     }
 

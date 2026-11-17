@@ -29,6 +29,19 @@ public interface ITeamRepository<TTeamEntity, TMember> : IRepository
         return [.. found.Values];
     }
 
+    /// <summary>
+    /// A page of the live teams this user has accepted membership of, by name then key, each carrying only this user's own
+    /// member entry.
+    /// </summary>
+    /// <remarks>A default interface method that reads every team and slices, so a host's own repository keeps compiling; the built-in one asks the database for the page alone.</remarks>
+    async Task<(IReadOnlyList<TTeamEntity> Teams, string NextCursor)> GetTeamPageByUserAsync(string userKey, TeamPageRequest request)
+    {
+        var teams = new List<TTeamEntity>();
+        await foreach (var team in GetTeamsByUserAsync(userKey)) teams.Add(team);
+
+        return TeamPaging.Slice(teams, request);
+    }
+
     Task<TTeamEntity> GetAsync(string teamKey);
     Task AddAsync(TTeamEntity teamEntity);
     Task DeleteAsync(string teamKey);

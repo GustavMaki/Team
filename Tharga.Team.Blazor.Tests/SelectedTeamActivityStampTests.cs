@@ -45,7 +45,7 @@ public class SelectedTeamActivityStampTests
         => new(_teamService.Object, _navigation, _localStorage.Object, _js.Object, _authenticationStateProvider.Object, Options.Create(new ThargaBlazorOptions()));
 
     private void HasTeams(params ITeam[] teams)
-        => _teamService.Setup(x => x.GetTeamsAsync()).Returns(() => AsAsync(teams));
+        => _teamService.Setup(x => x.GetTeamPageAsync(It.IsAny<TeamPageRequest>())).ReturnsAsync(() => new TeamPage([.. teams.Select(TeamSummary.Of)], null));
 
     /// <summary>Signed in with the claims already naming <paramref name="currentTeamKey"/>, so the team is restored, not chosen.</summary>
     private void SignedIn(string currentTeamKey = null)

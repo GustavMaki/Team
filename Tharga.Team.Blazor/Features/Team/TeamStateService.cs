@@ -160,7 +160,7 @@ internal class TeamStateService : ITeamStateService
             // Two sets, two purposes. `visibleTeams` (widened for a teams:read holder) decides which
             // *chosen* team is still legitimate; `teams` (own memberships) is the only source for the
             // fallback, so nobody is ever defaulted into a tenant they didn't pick.
-            var teams = await _teamService.GetTeamsAsync().ToArrayAsync();
+            ITeam[] teams = await _teamService.GetAllTeamSummariesAsync();
             var currentTeamKey = principal.Claims.FirstOrDefault(x => x.Type == Constants.TeamKeyCookie)?.Value;
             var visibleTeams = await WithSimulatedTeamAsync(principal, currentTeamKey, await GetVisibleTeamsAsync(principal, teams));
 

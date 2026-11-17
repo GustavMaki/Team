@@ -40,6 +40,37 @@ public interface ITeamService
     IAsyncEnumerable<ITeam<TMember>> GetTeamsAsync<TMember>() where TMember : ITeamMember;
 
     /// <summary>
+    /// A page of the caller's own teams without their rosters, unfiltered by <c>team:read</c> like <see cref="GetTeamsAsync()"/>.
+    /// For a caller that does not know the host's member type. A default member, and a decorator must forward it.
+    /// </summary>
+    async Task<TeamPage> GetTeamPageAsync(TeamPageRequest request)
+    {
+        var teams = new List<ITeam>();
+        await foreach (var team in GetTeamsAsync()) teams.Add(team);
+
+        var (items, next) = TeamPaging.Slice(teams, request);
+        return new TeamPage([.. items.Select(TeamSummary.Of)], next);
+    }
+
+    /// <summary>
+    /// A page of the caller's teams by name then key, each carrying at most the caller's own membership — what the read
+    /// filter needs and no more.
+    /// </summary>
+    /// <remarks>
+    /// A default member, so an implementation of your own keeps compiling: it reads every team and slices the page out
+    /// of them, which is the cost this exists to avoid, and a storage-backed service overrides it. <b>A decorator
+    /// must forward it</b>, or it resolves to this default.
+    /// </remarks>
+    async Task<TeamPageOf<TMember>> GetTeamPageAsync<TMember>(TeamPageRequest request) where TMember : ITeamMember
+    {
+        var teams = new List<ITeam<TMember>>();
+        await foreach (var team in GetTeamsAsync<TMember>()) teams.Add(team);
+
+        var (items, next) = TeamPaging.Slice(teams, request);
+        return new TeamPageOf<TMember>(items, next);
+    }
+
+    /// <summary>
     /// Every team, regardless of membership. Requires the <see cref="SystemTeamScopes.Read"/> system scope.
     /// </summary>
     /// <remarks>
