@@ -59,6 +59,21 @@ public class MongoDbAuditLogger : BackgroundService, IAuditLogger
         };
     }
 
+    /// <remarks>The server folds the entries into units of work and pages them, so a page is a page of groups and the count is of groups.</remarks>
+    public async Task<AuditGroupResult> QueryGroupsAsync(AuditQuery query)
+    {
+        var collection = _serviceProvider.GetService<IAuditRepositoryCollection>();
+        if (collection == null) return new AuditGroupResult();
+
+        var (groups, total) = await collection.GetGroupsAsync(BuildFilter(query), query.Skip, query.Take, query.SortDescending);
+
+        return new AuditGroupResult
+        {
+            Items = [.. groups.Select(g => AuditEntryGroup.Of(g.Select(ToAuditEntry)))],
+            TotalCount = total
+        };
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // The writer of the audit log itself: it records what others did and has no caller of its own to authorize.

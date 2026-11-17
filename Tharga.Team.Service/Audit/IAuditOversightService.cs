@@ -25,4 +25,12 @@ public interface IAuditOversightService
     /// </summary>
     [RequireScope(AuditScopes.Read)]
     Task<AuditQueryResult> QueryAllAsync(AuditQuery query);
+
+    /// <summary>
+    /// The same entries as <see cref="QueryAllAsync"/> folded into units of work, one group per correlation id, paged by group.
+    /// </summary>
+    /// <remarks>A default member, so an implementation of your own keeps compiling; it refuses until it implements this.</remarks>
+    [RequireScope(AuditScopes.Read)]
+    Task<AuditGroupResult> QueryAllGroupsAsync(AuditQuery query)
+        => throw new NotSupportedException($"'{GetType().Name}' does not implement {nameof(QueryAllGroupsAsync)}.");
 }

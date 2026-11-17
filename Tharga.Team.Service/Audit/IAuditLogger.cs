@@ -7,6 +7,21 @@ public interface IAuditLogger
 {
     void Log(AuditEntry entry);
     Task<AuditQueryResult> QueryAsync(AuditQuery query);
+
+    /// <summary>
+    /// The entries matching <paramref name="query"/> as units of work: one group per correlation id, paged by group
+    /// (<see cref="AuditQuery.Skip"/> and <see cref="AuditQuery.Take"/> count groups), ordered by when each began.
+    /// </summary>
+    /// <remarks>
+    /// A default member, so a logger of your own keeps compiling: it answers a group per entry, which is honest about
+    /// what it cannot fold. <b>A decorator or composite must forward it</b>, or it resolves to this default.
+    /// </remarks>
+    async Task<AuditGroupResult> QueryGroupsAsync(AuditQuery query)
+    {
+        var result = await QueryAsync(query);
+
+        return new AuditGroupResult { Items = [.. result.Items.Select(x => AuditEntryGroup.Of([x]))], TotalCount = result.TotalCount };
+    }
 }
 
 /// <summary>
