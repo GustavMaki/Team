@@ -152,6 +152,11 @@ public static class ThargaTeamRegistration
             services.TrackMongoCollection(typeof(ISupportAiConnectionCollection), typeof(SupportAiConnectionCollection));
             services.TryAddScoped<ISupportAiConnectionStore, MongoSupportAiConnectionStore>();
 
+            // The platform's AI catalogue, one document. TryAdd so a host keeping its own wins.
+            services.AddTransient<IPlatformAiCatalogueCollection, PlatformAiCatalogueCollection>();
+            services.TrackMongoCollection(typeof(IPlatformAiCatalogueCollection), typeof(PlatformAiCatalogueCollection));
+            services.TryAddScoped<IPlatformAiCatalogueStore, MongoPlatformAiCatalogueStore>();
+
             // The assistant's usage, one document per time it was asked. TryAdd so a host keeping its own wins; the
             // sink hands every record to whichever store is registered, the host's included.
             services.AddTransient<ISupportAssistantUsageCollection, SupportAssistantUsageCollection>();
