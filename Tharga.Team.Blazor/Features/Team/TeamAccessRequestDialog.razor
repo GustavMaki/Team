@@ -58,6 +58,12 @@
     /// <summary>The team to request access to.</summary>
     [Parameter] public string TeamKey { get; set; }
 
+    /// <summary>The support case the request is made from, which the request remembers so the case can show it; null when it is not made from one.</summary>
+    [Parameter] public string SupportCaseId { get; set; }
+
+    /// <summary>What the reason starts as, for a caller who is not typing it from scratch; the requester may change it.</summary>
+    [Parameter] public string InitialMessage { get; set; }
+
     private TextSet _text = TextSet.Empty;
     private AccessLevel[] _levels = [];
     private AccessLevel _level = AccessLevel.Viewer;
@@ -71,6 +77,7 @@
         _text = await TextProvider.ResolveAsync(TeamAccessRequestText.All);
         _levels = AccessLevelVisibility.Apply(TeamAccessRequestRules.RequestableLevels, BlazorOptions.Value.HiddenAccessLevels);
         if (_levels.Length > 0) _level = _levels[0];
+        _message ??= InitialMessage;
     }
 
     private async Task SendAsync()
@@ -81,7 +88,7 @@
         try
         {
             var duration = TeamAccessRequestGate.DurationChoices.First(x => x.Key == _durationKey).Duration;
-            await AccessRequestService.RequestTeamAccessAsync(TeamKey, _level, duration, _message);
+            await AccessRequestService.RequestTeamAccessAsync(TeamKey, _level, duration, _message, SupportCaseId);
             DialogService.Close(true);
         }
         catch (Exception e) when (e is UnauthorizedAccessException or InvalidOperationException or ArgumentException)

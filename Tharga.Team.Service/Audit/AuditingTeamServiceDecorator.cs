@@ -483,16 +483,20 @@ public class AuditingTeamServiceDecorator : ITeamService
         }
     }
 
-    public async Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message)
+    public Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message)
+        => RequestTeamAccessAsync(teamKey, accessLevel, duration, message, null);
+
+    public async Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message, string supportCaseId)
     {
         var metadata = Meta(
             (AuditMetadataKeys.AccessRequestAccessLevel, accessLevel.ToString()),
-            (AuditMetadataKeys.AccessRequestDuration, DurationText(duration)));
+            (AuditMetadataKeys.AccessRequestDuration, DurationText(duration)),
+            (AuditMetadataKeys.AccessRequestSupportCaseId, string.IsNullOrWhiteSpace(supportCaseId) ? null : supportCaseId.Trim()));
 
         var sw = Stopwatch.StartNew();
         try
         {
-            var request = await _inner.RequestTeamAccessAsync(teamKey, accessLevel, duration, message);
+            var request = await _inner.RequestTeamAccessAsync(teamKey, accessLevel, duration, message, supportCaseId);
             sw.Stop();
             if (request != null)
             {

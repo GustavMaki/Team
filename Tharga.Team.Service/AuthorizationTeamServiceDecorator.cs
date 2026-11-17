@@ -198,13 +198,17 @@ public sealed class AuthorizationTeamServiceDecorator : ITeamService
     /// the configured consent roles — a caller holding none would be asking for access approval could never give them.
     /// Membership and the level are the inner service's rules.
     /// </remarks>
-    public async Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message)
+    public Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message)
+        => RequestTeamAccessAsync(teamKey, accessLevel, duration, message, null);
+
+    /// <remarks>The case changes nothing about who may ask: a consent role is the check, and the case is only remembered with the request.</remarks>
+    public async Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message, string supportCaseId)
     {
         if (!await _authorizer.HoldsAnyRoleAsync(_consent.Roles))
             throw new UnauthorizedAccessException(
                 $"Requesting access to team '{teamKey}' requires one of the consent roles: {string.Join(", ", _consent.Roles ?? [])}.");
 
-        return await _inner.RequestTeamAccessAsync(teamKey, accessLevel, duration, message);
+        return await _inner.RequestTeamAccessAsync(teamKey, accessLevel, duration, message, supportCaseId);
     }
 
     /// <remarks>Only the requester may cancel, which the inner service checks against the caller.</remarks>

@@ -32,6 +32,12 @@ else if (_canRequest)
     /// <summary>Button size. Default <c>Small</c>.</summary>
     [Parameter] public ButtonSize Size { get; set; } = ButtonSize.Small;
 
+    /// <summary>The support case the request is made from, so the case shows it and how it was decided; null for a request made from anywhere else.</summary>
+    [Parameter] public string SupportCaseId { get; set; }
+
+    /// <summary>What the reason in the request dialog starts as; the requester may change it.</summary>
+    [Parameter] public string InitialMessage { get; set; }
+
     /// <summary>Raised after a request was sent or withdrawn, so a host can reload what it shows.</summary>
     [Parameter] public EventCallback Changed { get; set; }
 
@@ -87,7 +93,12 @@ else if (_canRequest)
     private async Task RequestAsync()
     {
         var sent = await DialogService.OpenAsync<TeamAccessRequestDialog>(_text[TeamAccessRequestText.RequestAccess],
-            new Dictionary<string, object> { [nameof(TeamAccessRequestDialog.TeamKey)] = TeamKey },
+            new Dictionary<string, object>
+            {
+                [nameof(TeamAccessRequestDialog.TeamKey)] = TeamKey,
+                [nameof(TeamAccessRequestDialog.SupportCaseId)] = SupportCaseId,
+                [nameof(TeamAccessRequestDialog.InitialMessage)] = InitialMessage
+            },
             new DialogOptions { Width = "520px" });
 
         if (sent is not true) return;

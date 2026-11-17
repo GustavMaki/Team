@@ -28,6 +28,13 @@ public interface ITeamAccessRequestService
     /// </summary>
     Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message);
 
+    /// <summary>Asks as the overload without a case does, from the support case <paramref name="supportCaseId"/>: the request remembers it, and the case shows the request and how it was decided.</summary>
+    /// <remarks>A default interface method that passes a null case on and refuses any other, so a host's own implementation keeps compiling and never silently drops the case.</remarks>
+    Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message, string supportCaseId)
+        => supportCaseId == null
+            ? RequestTeamAccessAsync(teamKey, accessLevel, duration, message)
+            : throw new NotSupportedException($"'{GetType().Name}' does not implement a request for access from a support case.");
+
     /// <summary>Withdraws the caller's own pending request.</summary>
     Task CancelTeamAccessRequestAsync(string teamKey, string requestId);
 

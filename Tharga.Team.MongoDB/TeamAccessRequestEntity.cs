@@ -28,6 +28,9 @@ public sealed record TeamAccessRequestEntity
     [BsonIgnoreIfNull]
     public string Message { get; init; }
 
+    [BsonIgnoreIfNull]
+    public string SupportCaseId { get; init; }
+
     public required DateTime RequestedAt { get; init; }
 
     [BsonRepresentation(BsonType.String)]
@@ -50,6 +53,7 @@ public sealed record TeamAccessRequestEntity
         AccessLevel = AccessLevel,
         Duration = Duration,
         Message = Message,
+        SupportCaseId = SupportCaseId,
         RequestedAt = RequestedAt,
         Status = Status,
         DecidedBy = DecidedBy,
@@ -65,6 +69,7 @@ public sealed record TeamAccessRequestEntity
         AccessLevel = request.AccessLevel,
         Duration = request.Duration,
         Message = request.Message,
+        SupportCaseId = request.SupportCaseId,
         RequestedAt = request.RequestedAt,
         Status = request.Status,
         DecidedBy = request.DecidedBy,

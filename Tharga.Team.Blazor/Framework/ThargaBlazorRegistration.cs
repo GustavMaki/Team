@@ -192,7 +192,9 @@ public static class ThargaBlazorRegistration
                     sp.GetService<ITeamPrincipalAccessor>(),
                     sp.GetService<ITenantRoleService>(),
                     sp.GetService<IOptions<ConsentOptions>>(),
-                    sp.GetService<IOptions<InvitationOptions>>()));
+                    sp.GetService<IOptions<InvitationOptions>>(),
+                    sp.GetServices<ITeamAccessRequestObserver>(),
+                    sp.GetService(typeof(ILogger<>).MakeGenericType(managementServiceType))));
 
                 // TryAdd, so a host substituting or decorating one facet keeps its own. That is the one
                 // legitimate reason this was ever left to the host, and it is answered here rather than

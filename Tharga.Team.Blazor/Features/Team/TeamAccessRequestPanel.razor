@@ -63,6 +63,10 @@
     /// <remarks>Withdrawing it is a team action on <c>TeamComponent</c>, not a button here.</remarks>
     [Parameter] public TeamAccessRequest MyPendingRequest { get; set; }
 
+    /// <summary>Shows only the requests made from this support case, and no notice about the team's consent, so a case can carry the decision about its own request; null shows them all.</summary>
+    /// <remarks>A caller who may not read the requests is shown none rather than an error, because the case is read by people who cannot decide.</remarks>
+    [Parameter] public string SupportCaseId { get; set; }
+
     /// <summary>Raised after anything here changed the team, so the host reloads it.</summary>
     [Parameter] public EventCallback Changed { get; set; }
 
@@ -78,11 +82,23 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _temporaryNotice = Team == null ? null : TeamAccessRequestGate.TemporaryConsentNotice(Team, BlazorOptions.Value.Consent.AccessLevel, DateTime.UtcNow, _text);
+        _temporaryNotice = Team == null || SupportCaseId != null ? null : TeamAccessRequestGate.TemporaryConsentNotice(Team, BlazorOptions.Value.Consent.AccessLevel, DateTime.UtcNow, _text);
 
-        _pending = CanDecide && Team != null
-            ? [.. (await TeamManagementService.GetAccessRequestsAsync(Team.Key)).Where(x => x.Status == TeamAccessRequestStatus.Pending)]
-            : [];
+        if (!CanDecide || Team == null)
+        {
+            _pending = [];
+            return;
+        }
+
+        try
+        {
+            _pending = [.. (await TeamManagementService.GetAccessRequestsAsync(Team.Key))
+                .Where(x => x.Status == TeamAccessRequestStatus.Pending && (SupportCaseId == null || x.SupportCaseId == SupportCaseId))];
+        }
+        catch (UnauthorizedAccessException) when (SupportCaseId != null)
+        {
+            _pending = [];
+        }
     }
 
     private async Task ApproveAsync(TeamAccessRequest request)

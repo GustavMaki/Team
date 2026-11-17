@@ -278,6 +278,9 @@ public static class SupportRegistration
         // scope while the page waiting for it lives in a circuit's. A scoped notifier would raise the event
         // on an instance nothing is listening to.
         services.TryAddSingleton<ISupportCaseNotifier, SupportCaseNotifier>();
+
+        // Shows a request for access made from a case, and how it was decided, in that case (Tharga/Team#379). Added beside any other observer, never instead of one.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ITeamAccessRequestObserver, SupportCaseAccessRequestObserver>());
         services.TryAddSingleton<ISupportTypingNotifier, SupportTypingNotifier>();
 
         // Purging a team destroys its cases. The store has exposed DeleteCasesForTeamAsync since the cases

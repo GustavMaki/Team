@@ -200,6 +200,30 @@ which a team is consented-to by a request that is still pending.
 > This is the same trap that broke short invitation links in 3.20; `DecoratorDefaultMemberTests` now pins
 > every decorator in the toolkit against it, but it cannot see yours.
 
+## From a support case
+
+Answering a case often needs a look at the customer's data, so a request can be made **from the case** and the case shows what became of it.
+
+- **Staff ask from the case.** In the staff conversation (`SupportAcrossTeamsView`, or any `SupportCaseConversation` with `AsStaff`) a case that
+  belongs to a team shows what the reader already holds on it — *Your access to this team: Viewer (through the team's consent)* — and a
+  **Request access** button, prefilled with the case's team, the default level and duration, and *Support case: {subject}* as the reason. A reader who is a
+  member, or who already holds Administrator through consent, is told their level and is not offered a request.
+- **The request remembers its case**: `TeamAccessRequest.SupportCaseId`, set through the overloads
+  `RequestTeamAccessAsync(teamKey, accessLevel, duration, message, supportCaseId)` on `ITeamAccessRequestService` and `ITeamService`, and recorded in the
+  audit entry (`accessrequest.supportcase.id`). The overloads are default interface members: an implementation of your own keeps compiling, answers an ordinary
+  request and refuses one it would drop the case of. **A decorator of `ITeamService` must forward the new overload.**
+- **The case shows it** as `System` entries in the transcript, for both sides: *Sam Staff asked for Viewer access to the team for 4 hours*, then *Access to the
+  team was granted at Viewer until 2026-11-17 13:00 UTC*, or *denied*, or *withdrew*. They are posted by `ITeamAccessRequestObserver`, which the support
+  package registers; only a request naming a case **of that team** posts anything.
+- **The team's managers decide in the case.** The customer's conversation shows the requests made from that case to a reader who may decide them
+  (`team:manage` as a member), with the team page's own Approve and Deny, so the two cannot disagree. Approving consents the configured consent roles, as it
+  does everywhere. A reader who may not decide sees nothing. A case with **private** visibility is not read by the team's managers, so they decide it from the
+  team page as before.
+
+`ITeamAccessRequestObserver` is the general hook: register your own to react to a request being made, approved, denied or withdrawn. It is called by the
+`TeamManagementService` every component and controller injects, after the change is made and authorized; an observer that throws is logged and never undoes
+or hides the change. A host that injects the inner `ITeamService` directly bypasses it.
+
 ## What this deliberately does not do
 
 - **No email to managers.** The notification menu and the audit route are the channels.
