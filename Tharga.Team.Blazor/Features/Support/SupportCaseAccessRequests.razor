@@ -1,0 +1,52 @@
+@using Tharga.Team.Blazor.Features.Team
+@inject IServiceProvider Services
+
+@* The requests for access to the team that support made from this case, to the people who can decide them, where they are reading the case.
+   Approving or denying is the team page's own action -- the panel is the same one -- so the two cannot disagree. Shown to a reader who may not
+   decide, or in a host with no team service, as nothing. *@
+@if (_team != null)
+{
+    <div data-case-access-requests="@CaseId">
+        <TeamAccessRequestPanel Team="_team" CanDecide="true" SupportCaseId="@CaseId" Changed="ChangedAsync" />
+    </div>
+}
+
+@code {
+    /// <summary>The team the case belongs to.</summary>
+    [Parameter, EditorRequired] public string TeamKey { get; set; }
+
+    /// <summary>The case whose requests are shown.</summary>
+    [Parameter, EditorRequired] public string CaseId { get; set; }
+
+    /// <summary>Changes when the transcript does, so the requests are read again when support asks, or when somebody decides one.</summary>
+    /// <remarks>Without it a child whose parameters are all unchanged strings is not rendered again, and a request made while the case is open would never appear.</remarks>
+    [Parameter] public int Revision { get; set; }
+
+    /// <summary>Raised after a request was approved or denied, so the case reloads what it shows.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private ITeam _team;
+    private string _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{TeamKey}/{CaseId}";
+        if (_loadedFor == key) return;
+        _loadedFor = key;
+
+        _team = null;
+
+        if (string.IsNullOrWhiteSpace(TeamKey) || Services.GetService(typeof(ITeamManagementService)) is not ITeamManagementService management) return;
+
+        try
+        {
+            _team = await management.GetTeamByKeyAsync(TeamKey);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // A reader who may not read the team cannot decide anything on it.
+        }
+    }
+
+    private Task ChangedAsync() => Changed.InvokeAsync();
+}

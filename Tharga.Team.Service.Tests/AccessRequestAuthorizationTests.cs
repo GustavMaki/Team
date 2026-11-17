@@ -39,7 +39,28 @@ public class AccessRequestAuthorizationTests
 
         await sut.RequestTeamAccessAsync(Team, AccessLevel.Viewer, TimeSpan.FromHours(1), null);
 
-        await inner.Received(1).RequestTeamAccessAsync(Team, AccessLevel.Viewer, TimeSpan.FromHours(1), null);
+        await inner.Received(1).RequestTeamAccessAsync(Team, AccessLevel.Viewer, TimeSpan.FromHours(1), null, null);
+    }
+
+    /// <summary>The case changes nothing about who may ask, and is passed on to be remembered with the request.</summary>
+    [Fact]
+    public async Task ARequestFromACase_IsPassedOn_AndTheSameRoleDecides()
+    {
+        var (sut, inner) = Build(WithRoles("Developer"));
+
+        await sut.RequestTeamAccessAsync(Team, AccessLevel.Viewer, TimeSpan.FromHours(1), null, "case-1");
+
+        await inner.Received(1).RequestTeamAccessAsync(Team, AccessLevel.Viewer, TimeSpan.FromHours(1), null, "case-1");
+    }
+
+    [Fact]
+    public async Task ARequestFromACase_IsRefusedWithoutAConsentRole()
+    {
+        var (sut, inner) = Build(WithRoles("Other"));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => sut.RequestTeamAccessAsync(Team, AccessLevel.Viewer, null, null, "case-1"));
+
+        await inner.DidNotReceiveWithAnyArgs().RequestTeamAccessAsync(default, default, default, default, default);
     }
 
     /// <summary>Approval grants through consent, which would never reach a caller holding no consent role.</summary>
@@ -51,7 +72,7 @@ public class AccessRequestAuthorizationTests
         var ex = await Assert.ThrowsAsync<UnauthorizedAccessException>(() => sut.RequestTeamAccessAsync(Team, AccessLevel.Viewer, null, null));
 
         Assert.Contains("Developer", ex.Message);
-        await inner.DidNotReceiveWithAnyArgs().RequestTeamAccessAsync(default, default, default, default);
+        await inner.DidNotReceiveWithAnyArgs().RequestTeamAccessAsync(default, default, default, default, default);
     }
 
     [Fact]
@@ -61,7 +82,7 @@ public class AccessRequestAuthorizationTests
 
         await sut.RequestTeamAccessAsync(Team, AccessLevel.User, null, null);
 
-        await inner.ReceivedWithAnyArgs(1).RequestTeamAccessAsync(default, default, default, default);
+        await inner.ReceivedWithAnyArgs(1).RequestTeamAccessAsync(default, default, default, default, default);
     }
 
     [Fact]

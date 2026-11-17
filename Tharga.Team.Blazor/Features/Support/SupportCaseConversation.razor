@@ -14,6 +14,18 @@
     {
         <SupportContactTable Contact="Case.ExternalContact" CaseId="@Case.Id" TimeTemplate="TimeTemplate" />
         @Extras?.Invoke(Case)
+
+        @* What support holds on the team, and asking for more. Only once the case has a team: before that there is nobody to ask. *@
+        @if (Case.TeamKey != null)
+        {
+            <SupportCaseTeamAccess TeamKey="@Case.TeamKey" CaseId="@Case.Id" Subject="@Case.Subject" />
+        }
+    }
+
+    @* The requests support made from this case, to the people who can decide them. *@
+    @if (!AsStaff && Case.TeamKey != null)
+    {
+        <SupportCaseAccessRequests TeamKey="@Case.TeamKey" CaseId="@Case.Id" Revision="@_messages.Length" />
     }
 
     @* Whether an answer reached the customer is support's concern, and sending it again speaks for support. *@

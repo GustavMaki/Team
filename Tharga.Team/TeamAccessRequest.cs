@@ -48,6 +48,9 @@ public sealed record TeamAccessRequest
     /// <summary>Why access is needed, as the requester wrote it. Optional.</summary>
     public string Message { get; init; }
 
+    /// <summary>The support case this was asked for from, or null when it was not asked for from one. The case, and the people reading it, see the request and how it was decided.</summary>
+    public string SupportCaseId { get; init; }
+
     /// <summary>When the request was made (UTC).</summary>
     public required DateTime RequestedAt { get; init; }
 

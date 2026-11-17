@@ -188,6 +188,13 @@ public interface ITeamService
     Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message)
         => throw new NotSupportedException($"'{GetType().Name}' does not implement {nameof(RequestTeamAccessAsync)}.");
 
+    /// <summary>Asks for access as the overload without a case does, from the support case <paramref name="supportCaseId"/>, which the request then remembers.</summary>
+    /// <remarks>A default interface method that passes a null case on to the overload above and refuses any other, so a host implementing this contract keeps compiling and never silently drops the case; a decorator must forward it.</remarks>
+    Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message, string supportCaseId)
+        => supportCaseId == null
+            ? RequestTeamAccessAsync(teamKey, accessLevel, duration, message)
+            : throw new NotSupportedException($"'{GetType().Name}' does not implement a request for access from a support case.");
+
     /// <summary>Withdraws the caller's own pending request.</summary>
     Task CancelTeamAccessRequestAsync(string teamKey, string requestId)
         => throw new NotSupportedException($"'{GetType().Name}' does not implement {nameof(CancelTeamAccessRequestAsync)}.");

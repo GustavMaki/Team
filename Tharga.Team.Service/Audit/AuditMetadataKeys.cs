@@ -71,6 +71,7 @@ public static class AuditMetadataKeys
 
     /// <summary>Who made the access request (user key).</summary>
     public const string AccessRequestRequesterKey = "accessrequest.requester.key";
+    public const string AccessRequestSupportCaseId = "accessrequest.supportcase.id";
 
     /// <summary>The access level asked for.</summary>
     public const string AccessRequestAccessLevel = "accessrequest.accesslevel";

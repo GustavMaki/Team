@@ -1052,7 +1052,11 @@ public abstract class TeamServiceBase : ITeamService
     /// Who may request — a holder of a consent role — is enforced by <c>AuthorizationTeamServiceDecorator</c>, which
     /// reads the caller's claims. The rules here are the ones the request itself must satisfy.
     /// </remarks>
-    public async Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message)
+    public Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message)
+        => RequestTeamAccessAsync(teamKey, accessLevel, duration, message, null);
+
+    /// <inheritdoc />
+    public async Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message, string supportCaseId)
     {
         var user = await RequireCurrentUserAsync();
 
@@ -1082,6 +1086,7 @@ public abstract class TeamServiceBase : ITeamService
             AccessLevel = accessLevel,
             Duration = duration,
             Message = note,
+            SupportCaseId = string.IsNullOrWhiteSpace(supportCaseId) ? null : supportCaseId.Trim(),
             RequestedAt = DateTime.UtcNow
         };
 

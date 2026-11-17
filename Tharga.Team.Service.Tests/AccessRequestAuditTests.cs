@@ -40,7 +40,7 @@ public class AccessRequestAuditTests
     public async Task Requesting_RecordsTheRequest()
     {
         var (sut, inner, recorder) = Build();
-        inner.RequestTeamAccessAsync(TeamKey, AccessLevel.Administrator, TimeSpan.FromHours(8), "why").Returns(Pending);
+        inner.RequestTeamAccessAsync(TeamKey, AccessLevel.Administrator, TimeSpan.FromHours(8), "why", null).Returns(Pending);
 
         await sut.RequestTeamAccessAsync(TeamKey, AccessLevel.Administrator, TimeSpan.FromHours(8), "why");
 
@@ -53,10 +53,24 @@ public class AccessRequestAuditTests
     }
 
     [Fact]
+    public async Task ARequestFromACase_RecordsTheCase_AndOneFromNowhereRecordsNone()
+    {
+        var (sut, inner, recorder) = Build();
+        inner.RequestTeamAccessAsync(TeamKey, AccessLevel.Viewer, null, null, "case-1").Returns(Pending);
+        inner.RequestTeamAccessAsync(TeamKey, AccessLevel.Viewer, null, null, null).Returns(Pending);
+
+        await sut.RequestTeamAccessAsync(TeamKey, AccessLevel.Viewer, null, null, "  case-1 ");
+        await sut.RequestTeamAccessAsync(TeamKey, AccessLevel.Viewer, null, null);
+
+        Assert.Equal("case-1", recorder.Entries[0].Metadata[AuditMetadataKeys.AccessRequestSupportCaseId]);
+        Assert.False(recorder.Entries[1].Metadata.ContainsKey(AuditMetadataKeys.AccessRequestSupportCaseId));
+    }
+
+    [Fact]
     public async Task ARequestWithNoEnd_RecordsNone()
     {
         var (sut, inner, recorder) = Build();
-        inner.RequestTeamAccessAsync(TeamKey, AccessLevel.Viewer, null, null).Returns(Pending with { Duration = null });
+        inner.RequestTeamAccessAsync(TeamKey, AccessLevel.Viewer, null, null, null).Returns(Pending with { Duration = null });
 
         await sut.RequestTeamAccessAsync(TeamKey, AccessLevel.Viewer, null, null);
 
@@ -68,7 +82,7 @@ public class AccessRequestAuditTests
     public async Task ARefusedRequest_IsRecordedAsFailed()
     {
         var (sut, inner, recorder) = Build();
-        inner.RequestTeamAccessAsync(default, default, default, default).ReturnsForAnyArgs<TeamAccessRequest>(_ => throw new UnauthorizedAccessException("no role"));
+        inner.RequestTeamAccessAsync(default, default, default, default, default).ReturnsForAnyArgs<TeamAccessRequest>(_ => throw new UnauthorizedAccessException("no role"));
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => sut.RequestTeamAccessAsync(TeamKey, AccessLevel.Viewer, null, null));
 

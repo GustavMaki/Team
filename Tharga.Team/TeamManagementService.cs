@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 // ITeamPrincipalAccessor keeps its original namespace so no consumer's using breaks; it now lives in this
 // assembly, because this is where team reads are gated and the gate needs the caller's claims.
@@ -35,6 +36,8 @@ public class TeamManagementService<TMember> : ITeamManagementService, ITeamLifec
     private readonly ConsentOptions _consent;
     private readonly InvitationOptions _invitation;
     private readonly TeamGrantResolver _grants;
+    private readonly ITeamAccessRequestObserver[] _requestObservers;
+    private readonly ILogger _logger;
 
     public TeamManagementService(ITeamService inner)
         : this(inner, null, null)
@@ -68,7 +71,9 @@ public class TeamManagementService<TMember> : ITeamManagementService, ITeamLifec
         ITeamPrincipalAccessor principalAccessor,
         ITenantRoleService tenantRoleService,
         IOptions<ConsentOptions> consentOptions,
-        IOptions<InvitationOptions> invitationOptions = null)
+        IOptions<InvitationOptions> invitationOptions = null,
+        IEnumerable<ITeamAccessRequestObserver> requestObservers = null,
+        ILogger<TeamManagementService<TMember>> logger = null)
     {
         _inner = inner;
         _userService = userService;
@@ -76,6 +81,8 @@ public class TeamManagementService<TMember> : ITeamManagementService, ITeamLifec
         _principalAccessor = principalAccessor;
         _consent = consentOptions?.Value ?? new ConsentOptions();
         _invitation = invitationOptions?.Value ?? new InvitationOptions();
+        _requestObservers = [.. requestObservers ?? []];
+        _logger = logger;
         _grants = new TeamGrantResolver(inner, scopeRegistry, tenantRoleService);
     }
 
@@ -106,21 +113,75 @@ public class TeamManagementService<TMember> : ITeamManagementService, ITeamLifec
 
     /// <inheritdoc />
     public Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message)
-        => _inner.RequestTeamAccessAsync(teamKey, accessLevel, duration, message);
+        => RequestTeamAccessAsync(teamKey, accessLevel, duration, message, null);
 
     /// <inheritdoc />
-    public Task CancelTeamAccessRequestAsync(string teamKey, string requestId) => _inner.CancelTeamAccessRequestAsync(teamKey, requestId);
+    public async Task<TeamAccessRequest> RequestTeamAccessAsync(string teamKey, AccessLevel accessLevel, TimeSpan? duration, string message, string supportCaseId)
+    {
+        var request = await _inner.RequestTeamAccessAsync(teamKey, accessLevel, duration, message, supportCaseId);
+        await NotifyRequestChangedAsync(teamKey, request);
+
+        return request;
+    }
+
+    /// <inheritdoc />
+    public async Task CancelTeamAccessRequestAsync(string teamKey, string requestId)
+    {
+        await _inner.CancelTeamAccessRequestAsync(teamKey, requestId);
+        await NotifyRequestChangedAsync(teamKey, requestId);
+    }
+
+    /// <summary>Tells every observer that a request changed; one that fails is logged and never undoes the change.</summary>
+    private async Task NotifyRequestChangedAsync(string teamKey, TeamAccessRequest request)
+    {
+        if (request == null || _requestObservers.Length == 0) return;
+
+        foreach (var observer in _requestObservers)
+        {
+            try
+            {
+                await observer.ChangedAsync(teamKey, request);
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _logger?.LogWarning(e, "{Observer} could not be told that access request {RequestId} changed.", observer.GetType().Name, request.Id);
+            }
+        }
+    }
+
+    /// <summary>As above, for a request read back after it was decided, so what the observers are told is what was stored.</summary>
+    private async Task NotifyRequestChangedAsync(string teamKey, string requestId)
+    {
+        if (_requestObservers.Length == 0) return;
+
+        try
+        {
+            var decided = (await _inner.GetTeamByKeyAsync(teamKey))?.AccessRequests?.FirstOrDefault(x => x.Id == requestId);
+            if (decided != null) await NotifyRequestChangedAsync(teamKey, decided);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            _logger?.LogWarning(e, "Access request {RequestId} could not be read back to tell its observers.", requestId);
+        }
+    }
 
     /// <inheritdoc />
     /// <remarks>
     /// Consents the configured consent roles — the same roles the consent selector offers — so approving a request and
     /// setting consent by hand cannot consent different sets. Enforced downstream by <c>AuthorizationTeamServiceDecorator</c>.
     /// </remarks>
-    public Task ApproveTeamAccessRequestAsync(string teamKey, string requestId)
-        => _inner.ApproveTeamAccessRequestAsync(teamKey, requestId, _consent.Roles ?? []);
+    public async Task ApproveTeamAccessRequestAsync(string teamKey, string requestId)
+    {
+        await _inner.ApproveTeamAccessRequestAsync(teamKey, requestId, _consent.Roles ?? []);
+        await NotifyRequestChangedAsync(teamKey, requestId);
+    }
 
     /// <inheritdoc />
-    public Task DenyTeamAccessRequestAsync(string teamKey, string requestId) => _inner.DenyTeamAccessRequestAsync(teamKey, requestId);
+    public async Task DenyTeamAccessRequestAsync(string teamKey, string requestId)
+    {
+        await _inner.DenyTeamAccessRequestAsync(teamKey, requestId);
+        await NotifyRequestChangedAsync(teamKey, requestId);
+    }
 
     /// <inheritdoc />
     /// <remarks>

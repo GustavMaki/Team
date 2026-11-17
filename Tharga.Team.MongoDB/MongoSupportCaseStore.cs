@@ -100,7 +100,8 @@ internal sealed class MongoSupportCaseStore(ISupportCaseRepositoryCollection col
 
         var update = Builders<SupportCaseEntity>.Update
             .Push(x => x.Messages, ToEntity(message with { Sequence = NextSequence(entity) }))
-            .Set(x => x.LastMessageFromAuthor, !message.AsSupport && message.AuthorIdentity == entity.AuthorIdentity)
+            // Only a person's own message can leave the case waiting on support. A notice has no author identity, which an unattributed case also has, so the comparison alone would read the toolkit as the customer.
+            .Set(x => x.LastMessageFromAuthor, message.Kind == SupportMessageKind.User && !message.AsSupport && message.AuthorIdentity == entity.AuthorIdentity)
             .Set(x => x.LastMessageAt, message.SentAt);
 
         await UpdateAsync(teamKey, caseId, update);

@@ -1,0 +1,86 @@
+@using Tharga.Team.Blazor.Features.Team
+@using Tharga.Team.Blazor.Framework
+@inject IServiceProvider Services
+@inject IThargaTextProvider TextProvider
+
+@* What support holds on the case's team, and the way to ask for more, beside the case it is asked for. A staff member who already has
+   the highest level that can be requested -- or is a member -- is told what they hold and is not offered a request. Renders nothing for a
+   host that has no team service, so a host that only wants support cases is not made to register one. *@
+@if (_access != null || _canAsk)
+{
+    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap" data-case-access="@CaseId">
+        @if (_access != null)
+        {
+            <RadzenIcon Icon="key" />
+            <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0" data-access-level="@_access.AccessLevel">
+                @_text.Format(SupportCaseAccessText.YourAccess, _access.AccessLevel, _text[_access.IsMember ? SupportCaseAccessText.AsMember : SupportCaseAccessText.ThroughConsent])
+            </RadzenText>
+        }
+
+        @if (_canAsk)
+        {
+            <TeamAccessRequestButton TeamKey="@TeamKey" SupportCaseId="@CaseId" InitialMessage="@Reason" ButtonStyle="ButtonStyle.Secondary" Changed="LoadAsync" />
+        }
+    </RadzenStack>
+}
+
+@code {
+    /// <summary>The team the case belongs to.</summary>
+    [Parameter, EditorRequired] public string TeamKey { get; set; }
+
+    /// <summary>The case, which the request remembers.</summary>
+    [Parameter, EditorRequired] public string CaseId { get; set; }
+
+    /// <summary>The case's subject, which the reason of the request starts from.</summary>
+    [Parameter] public string Subject { get; set; }
+
+    private const int MaxSubjectLength = 200;
+
+    private TextSet _text = TextSet.Empty;
+    private CallerTeamAccess _access;
+    private bool _canAsk;
+    private string _loadedFor;
+
+    private string Reason
+    {
+        get
+        {
+            var subject = (Subject ?? string.Empty).Trim();
+            if (subject.Length > MaxSubjectLength) subject = subject[..MaxSubjectLength];
+
+            return subject.Length == 0 ? null : _text.Format(SupportCaseAccessText.CaseReason, subject);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _text = await TextProvider.ResolveAsync(SupportCaseAccessText.All);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{TeamKey}/{CaseId}";
+        if (_loadedFor == key) return;
+        _loadedFor = key;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var directory = Services.GetService(typeof(ITeamDirectoryService)) as ITeamDirectoryService;
+
+        if (string.IsNullOrWhiteSpace(TeamKey) || directory == null || Services.GetService(typeof(ITeamAccessRequestService)) == null)
+        {
+            _access = null;
+            _canAsk = false;
+            return;
+        }
+
+        _access = await directory.GetMyAccessAsync(TeamKey);
+
+        // A member cannot ask, and the highest level that can be requested leaves nothing to ask for. Anything lower, or no access at all, can.
+        _canAsk = _access == null || (!_access.IsMember && _access.AccessLevel != AccessLevel.Administrator);
+        StateHasChanged();
+    }
+}
