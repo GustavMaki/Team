@@ -119,6 +119,17 @@ public static class AuditLogViewText
     public static readonly TextKey FailureScope = new("team.auditLogView.failureScope", "Scope: {0} ({1})");
     public static readonly TextKey FailureReason = new("team.auditLogView.failureReason", "Reason: {0}");
 
+    public static readonly TextKey GroupByRequest = new("team.auditLogView.groupByRequest", "Group by request");
+
+    /// <summary>The badge on a row that stands for several entries. Placeholder: how many more there are.</summary>
+    public static readonly TextKey GroupMoreBadge = new("team.auditLogView.groupMoreBadge", "+{0}");
+
+    /// <summary>Placeholder: the number of entries in the request.</summary>
+    public static readonly TextKey GroupMoreTitle = new("team.auditLogView.groupMoreTitle", "{0} entries were written for this request.");
+
+    public static readonly TextKey GroupEntries = new("team.auditLogView.groupEntries", "Everything written for this request");
+    public static readonly TextKey GroupFailedInside = new("team.auditLogView.groupFailedInside", "An entry in this request failed");
+
     /// <summary>Every key here, for the component building its <see cref="TextSet"/>.</summary>
     public static readonly TextKey[] All =
     [
@@ -136,5 +147,6 @@ public static class AuditLogViewText
         ChartAverageResponseTime, ChartResponseTimeByFeature, ChartSlowestOperations, SeriesAverageMs,
         NotifyQueryFailed, NotifyChartDataFailed, NotifyNoDataToExport, NotifyExportFailed,
         FailureScope, FailureReason,
+        GroupByRequest, GroupMoreBadge, GroupMoreTitle, GroupEntries, GroupFailedInside,
     ];
 }

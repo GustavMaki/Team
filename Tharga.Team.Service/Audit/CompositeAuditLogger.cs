@@ -81,6 +81,12 @@ public class CompositeAuditLogger : IAuditLogger
         return _queryLogger?.QueryAsync(query) ?? Task.FromResult(new AuditQueryResult());
     }
 
+    /// <inheritdoc />
+    public virtual Task<AuditGroupResult> QueryGroupsAsync(AuditQuery query)
+    {
+        return _queryLogger?.QueryGroupsAsync(query) ?? Task.FromResult(new AuditGroupResult());
+    }
+
     private bool ShouldLog(AuditEntry entry)
     {
         // Check caller filter

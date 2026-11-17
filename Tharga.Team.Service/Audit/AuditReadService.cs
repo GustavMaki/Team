@@ -29,4 +29,16 @@ public sealed class AuditReadService(CompositeAuditLogger auditLogger) : IAuditR
     {
         return auditLogger.QueryAsync(query ?? new AuditQuery());
     }
+
+    /// <inheritdoc cref="IAuditReadService.QueryGroupsAsync"/>
+    public Task<AuditGroupResult> QueryGroupsAsync(string teamKey, AuditQuery query)
+    {
+        return auditLogger.QueryGroupsAsync((query ?? new AuditQuery()) with { TeamKey = teamKey });
+    }
+
+    /// <inheritdoc cref="IAuditOversightService.QueryAllGroupsAsync"/>
+    public Task<AuditGroupResult> QueryAllGroupsAsync(AuditQuery query)
+    {
+        return auditLogger.QueryGroupsAsync(query ?? new AuditQuery());
+    }
 }

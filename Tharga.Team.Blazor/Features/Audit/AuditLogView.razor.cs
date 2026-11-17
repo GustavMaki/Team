@@ -63,6 +63,15 @@ public partial class AuditLogView : ComponentBase
     private IReadOnlyList<AuditEntry> _entries = Array.Empty<AuditEntry>();
     private IReadOnlyList<AuditEntry> _chartEntries = Array.Empty<AuditEntry>();
     private int _totalCount;
+
+    /// <summary>
+    /// Whether the log shows one row per unit of work (the entries written under one correlation id) rather than one per entry.
+    /// On by default: one action can write a screen of rows, and the meaningful one is hidden among the traces.
+    /// </summary>
+    private bool _groupByRequest = true;
+
+    /// <summary>The group each shown row stands for, while grouped. Keyed by reference: two entries can be equal by value.</summary>
+    private Dictionary<AuditEntry, AuditEntryGroup> _groupOf = new(ReferenceEqualityComparer.Instance);
     private int _pageSize = 8;
     private RadzenDataGrid<AuditEntry> _grid;
     private bool _initialLoadDone;
@@ -126,6 +135,28 @@ public partial class AuditLogView : ComponentBase
         if (_auditOversightService == null) throw new UnauthorizedAccessException("No audit service is registered.");
 
         return await _auditOversightService.QueryAllAsync(query with { TeamKey = teamKey });
+    }
+
+    /// <summary>The grouped read, routed exactly as <see cref="QueryAsync"/> routes the flat one.</summary>
+    private async Task<AuditGroupResult> QueryGroupsAsync(AuditQuery query)
+    {
+        var teamKey = AuditTeamScope.Resolve(query.TeamKey, PinnedFilter?.TeamKey, TeamKey);
+
+        if (!string.IsNullOrEmpty(teamKey) && _auditReadService != null)
+        {
+            try
+            {
+                return await _auditReadService.QueryGroupsAsync(teamKey, query);
+            }
+            catch (UnauthorizedAccessException) when (_auditOversightService != null)
+            {
+                // No grant on that team; a system grant may still cover it, narrowed by the filter.
+            }
+        }
+
+        if (_auditOversightService == null) throw new UnauthorizedAccessException("No audit service is registered.");
+
+        return await _auditOversightService.QueryAllGroupsAsync(query with { TeamKey = teamKey });
     }
 
     protected override async Task OnInitializedAsync()
@@ -299,9 +330,20 @@ public partial class AuditLogView : ComponentBase
         try
         {
             var query = BuildQuery(args.Skip ?? 0, args.Top ?? _pageSize, args.OrderBy, args.Filters);
-            var result = await QueryAsync(query);
-            _entries = result.Items;
-            _totalCount = result.TotalCount;
+            if (_groupByRequest)
+            {
+                // One row per unit of work, drawn as its lead entry; the group is kept for the badge and the expansion.
+                var groups = await QueryGroupsAsync(query);
+                ShowGroups(groups.Items);
+                _totalCount = groups.TotalCount;
+            }
+            else
+            {
+                var result = await QueryAsync(query);
+                _groupOf = new Dictionary<AuditEntry, AuditEntryGroup>(ReferenceEqualityComparer.Instance);
+                _entries = result.Items;
+                _totalCount = result.TotalCount;
+            }
 
             if (!_initialLoadDone)
             {
@@ -638,6 +680,22 @@ public partial class AuditLogView : ComponentBase
             lines.Add(text.Format(AuditLogViewText.FailureReason, entry.ErrorMessage));
         return string.Join("\n", lines);
     }
+
+    /// <summary>Shows one row per group, drawn as its lead entry; the groups are kept for the badge and the expansion.</summary>
+    internal void ShowGroups(IReadOnlyList<AuditEntryGroup> groups)
+    {
+        _groupOf = new Dictionary<AuditEntry, AuditEntryGroup>(ReferenceEqualityComparer.Instance);
+        foreach (var group in groups) _groupOf[group.Lead] = group;
+        _entries = [.. groups.Select(x => x.Lead)];
+    }
+
+    /// <summary>The group a shown row stands for, or null for a plain entry (a group of one is drawn as an entry).</summary>
+    internal AuditEntryGroup GroupOf(AuditEntry entry)
+        => _groupOf.TryGetValue(entry, out var group) && group.Count > 1 ? group : null;
+
+    /// <summary>The entry to show failure for: the row's own, else the first that failed within its group.</summary>
+    internal AuditEntry FailureOf(AuditEntry entry)
+        => !entry.Success ? entry : GroupOf(entry)?.Entries.FirstOrDefault(x => !x.Success);
 
     private string GetTeamName(string teamKey)
     {

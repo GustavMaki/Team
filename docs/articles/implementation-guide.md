@@ -3290,6 +3290,26 @@ and system keys), and **user administration** (directory verify, bulk verify, us
 | `<AuditLogView />` | Audit log viewer with charts and filtering |
 | `CompositeAuditLogger` | Write your own audit entries. Applies the caller/event filters and fans out to every configured backend. **Inject this, not `IAuditLogger`** — that resolves to a single backend and bypasses the filters. |
 
+### One row per request
+
+One action can write many audit entries: the domain entry, the access trace of the call, and the traces of the page
+reloading what it shows. They all share a `CorrelationId`, and `<AuditLogView />` shows **one row per correlation id**, drawn
+as the entry that stands for it (its first `DataChange`, else its first entry) with a `+N` badge, and failed when anything
+inside it failed. Open the row for everything written for that request, access traces last. A request that wrote one entry
+is an ordinary row, so background work with no request trace looks as it always did, and the several entries of one job
+fold under the correlation id the job declared. Entries written before 3.21 have no correlation id and stay one row each.
+
+The **Group by request** switch above the grid turns it off. Paging, the count and the filters work on groups while it is on:
+a filter decides which entries match, and a row is the matching entries of one request. While it is on, the column sorts
+other than time do not apply. Export and the usage charts still read entries.
+
+To read the groups yourself, `IAuditReadService.QueryGroupsAsync(teamKey, query)` and
+`IAuditOversightService.QueryAllGroupsAsync(query)` return an `AuditGroupResult` of `AuditEntryGroup` (`Lead`, `Entries`,
+`Others`, `Failed`), gated by `audit:read` like the flat reads. The server does the grouping and a collection index on
+`CorrelationId` and `Timestamp` is created for it. They are default interface members, so an implementation of your own keeps
+compiling; a logger that cannot group answers a group per entry, and a read service that has not implemented them refuses.
+**A decorator or composite of `IAuditLogger` must forward `QueryGroupsAsync`.**
+
 ### Scoping `<AuditLogView />`
 
 | Parameter | Effect |

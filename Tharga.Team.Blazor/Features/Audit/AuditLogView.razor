@@ -127,6 +127,10 @@ else
                             </Items>
                         </RadzenSelectBar>
                     </RadzenStack>
+                    <RadzenStack Orientation="Orientation.Vertical" Gap="0">
+                        <RadzenLabel Text="@_text[AuditLogViewText.GroupByRequest]" />
+                        <RadzenCheckBox @bind-Value="_groupByRequest" TValue="bool" Change="@(_ => OnFilterChanged())" />
+                    </RadzenStack>
                     <RadzenSplitButton Text="@_text[AuditLogViewText.Export]" Icon="download" Click="@(_ => ExportAsync("csv"))" Size="ButtonSize.Small">
                         <ChildContent>
                             <RadzenSplitButtonItem Text="@_text[AuditLogViewText.ExportCsv]" Value="csv" Icon="table_view" />
@@ -155,7 +159,7 @@ else
                             <Template>@GetTeamName(context.TeamKey)</Template>
                         </RadzenDataGridColumn>
                         <RadzenDataGridColumn Title="@_text[AuditLogViewText.ColumnCaller]" Property="@nameof(AuditEntry.CallerIdentity)" Width="180px"
-                                              Sortable="true">
+                                              Sortable="@(!_groupByRequest)">
                             <Template>
                                 <span title="@context.CallerIdentity">@GetCallerDisplayName(context)</span>
                             </Template>
@@ -177,9 +181,19 @@ else
                             </Template>
                         </RadzenDataGridColumn>
                         <RadzenDataGridColumn Title="@_text[AuditLogViewText.ColumnMethod]" Property="@nameof(AuditEntry.MethodName)" Width="140px"
-                                              Sortable="true" />
+                                              Sortable="@(!_groupByRequest)">
+                            <Template>
+                                @context.MethodName
+                                @if (GroupOf(context) is { } group)
+                                {
+                                    <RadzenBadge BadgeStyle="BadgeStyle.Info" IsPill="true" data-audit-group-badge
+                                                 Text="@_text.Format(AuditLogViewText.GroupMoreBadge, group.Count - 1)"
+                                                 title="@_text.Format(AuditLogViewText.GroupMoreTitle, group.Count)" />
+                                }
+                            </Template>
+                        </RadzenDataGridColumn>
                         <RadzenDataGridColumn Title="@_text[AuditLogViewText.ColumnDuration]" Property="@nameof(AuditEntry.DurationMs)" Width="80px"
-                                              Filterable="false" Sortable="true" TextAlign="TextAlign.Right"
+                                              Filterable="false" Sortable="@(!_groupByRequest)" TextAlign="TextAlign.Right"
                                               HeaderCssClass="rz-text-align-end">
                             <Template>@(context.DurationMs) ms</Template>
                         </RadzenDataGridColumn>
@@ -188,21 +202,50 @@ else
                         </RadzenDataGridColumn>
                         <RadzenDataGridColumn Title="@_text[AuditLogViewText.Result]" Width="160px" Filterable="false" Sortable="false">
                             <Template>
-                                @if (context.Success)
+                                @if (FailureOf(context) is not { } failed)
                                 {
                                     <RadzenIcon Icon="check_circle" Style="color: green" />
                                 }
                                 else
                                 {
-                                    <span title="@BuildFailureDetail(context, _text)" style="display:inline-flex;align-items:center;gap:0.25rem;">
+                                    @* The row's own failure, or the first one inside its group — a request that failed somewhere is not shown as fine. *@
+                                    <span title="@(ReferenceEquals(failed, context) ? BuildFailureDetail(failed, _text) : _text[AuditLogViewText.GroupFailedInside] + "\n" + BuildFailureDetail(failed, _text))" style="display:inline-flex;align-items:center;gap:0.25rem;">
                                         <RadzenIcon Icon="error" Style="color: red" />
-                                        <span style="color:#dc3545;font-size:0.8rem;white-space:nowrap;">@BuildFailureCode(context)</span>
+                                        <span style="color:#dc3545;font-size:0.8rem;white-space:nowrap;">@BuildFailureCode(failed)</span>
                                     </span>
                                 }
                             </Template>
                         </RadzenDataGridColumn>
                     </Columns>
                     <Template Context="entry">
+                        @if (GroupOf(entry) is { } unit)
+                        {
+                            <RadzenText TextStyle="TextStyle.Subtitle2" class="rz-m-2">@_text[AuditLogViewText.GroupEntries]</RadzenText>
+                            <RadzenTable Class="rz-m-2" data-audit-group-entries>
+                                <RadzenTableBody>
+                                    @foreach (var other in new[] { unit.Lead }.Concat(unit.Others))
+                                    {
+                                        <RadzenTableRow>
+                                            <RadzenTableCell><DateTimeView Date="other.Timestamp" Display="EDateTimeDisplay.Absolute" /></RadzenTableCell>
+                                            <RadzenTableCell>@other.EventType</RadzenTableCell>
+                                            <RadzenTableCell>@GetOperation(other)</RadzenTableCell>
+                                            <RadzenTableCell>@other.MethodName</RadzenTableCell>
+                                            <RadzenTableCell>@(other.DurationMs) ms</RadzenTableCell>
+                                            <RadzenTableCell>
+                                                @if (other.Success)
+                                                {
+                                                    <RadzenIcon Icon="check_circle" Style="color: green" />
+                                                }
+                                                else
+                                                {
+                                                    <span title="@BuildFailureDetail(other, _text)"><RadzenIcon Icon="error" Style="color: red" /> @BuildFailureCode(other)</span>
+                                                }
+                                            </RadzenTableCell>
+                                        </RadzenTableRow>
+                                    }
+                                </RadzenTableBody>
+                            </RadzenTable>
+                        }
                         @if (entry.Metadata is { Count: > 0 })
                         {
                             <RadzenTable Class="rz-m-2" Style="max-width:600px;">
